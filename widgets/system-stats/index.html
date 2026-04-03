@@ -1,0 +1,98 @@
+<!--
+  Moltamp System Stats Widget
+
+  This widget demonstrates the Moltamp SDK:
+  - moltamp.call() for IPC calls
+  - moltamp.subscribe() for store subscriptions
+  - moltamp.settings for widget-scoped persistence
+  - moltamp.el() helper for styled DOM elements
+  - moltamp.fmt for formatting
+  - moltamp.poll() for auto-cleanup intervals
+
+  Copy this folder to ~/Moltamp/widgets/<your-category>/<your-widget>/
+  and edit to build your own widget.
+-->
+
+<div id="root"></div>
+
+<script>
+(function() {
+  var root = document.getElementById('root');
+  var el = moltamp.el;
+  var fmt = moltamp.fmt;
+
+  // ── Layout ────────────────────────────────────────────────
+
+  var title = el('div', {
+    fontSize: '8px',
+    letterSpacing: '0.1em',
+    textTransform: 'uppercase',
+    color: 'var(--c-chrome-dim)',
+    marginBottom: '8px',
+  }, 'SYSTEM STATS');
+
+  var cpuLabel = el('span', { color: 'var(--c-chrome-accent)' }, '...');
+  var memLabel = el('span', { color: 'var(--c-chrome-accent)' }, '...');
+  var activityLabel = el('span', { color: 'var(--c-chrome-accent)' }, '...');
+  var shellLabel = el('span', { color: 'var(--c-chrome-accent)' }, '...');
+  var callCount = el('span', { color: 'var(--c-chrome-dim)' }, '0');
+
+  function row(label, valueEl) {
+    return el('div', { display: 'flex', justifyContent: 'space-between', padding: '2px 0' }, [
+      el('span', { color: 'var(--c-chrome-dim)' }, label),
+      valueEl,
+    ]);
+  }
+
+  var container = el('div', { padding: '4px' }, [
+    title,
+    row('CPU', cpuLabel),
+    row('Memory', memLabel),
+    row('Activity', activityLabel),
+    row('Shell State', shellLabel),
+    row('IPC Calls', callCount),
+  ]);
+
+  root.appendChild(container);
+
+  // ── IPC polling ───────────────────────────────────────────
+
+  var calls = 0;
+
+  moltamp.poll(3000, async function() {
+    try {
+      var stats = await moltamp.call('system.getStats');
+      calls++;
+      cpuLabel.textContent = stats.cpu.usagePct + '%';
+      memLabel.textContent = fmt.bytes(stats.memory.usedBytes) + ' / ' + fmt.bytes(stats.memory.totalBytes);
+      callCount.textContent = String(calls);
+    } catch (e) {
+      cpuLabel.textContent = 'ERR: ' + e.message;
+    }
+  });
+
+  // ── Store subscription ────────────────────────────────────
+
+  moltamp.subscribe('telemetry', 'activity', function(activity) {
+    activityLabel.textContent = activity;
+    activityLabel.style.color = activity === 'high' ? 'var(--t-green)'
+                              : activity === 'low' ? 'var(--t-yellow)'
+                              : 'var(--c-chrome-dim)';
+  });
+
+  // ── Shell state (forwarded by host) ───────────────────────
+
+  // Shell state comes as a subscription push with id "shell-state"
+  // The SDK handles this automatically if widget.json declares shellState: true
+  var origSubscriptions = {};
+  window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'moltamp:push' && e.data.subscriptionId === 'shell-state') {
+      shellLabel.textContent = e.data.data;
+      shellLabel.style.color = e.data.data === 'streaming' ? 'var(--t-green)'
+                             : e.data.data === 'thinking' ? 'var(--t-yellow)'
+                             : 'var(--c-chrome-dim)';
+    }
+  });
+
+})();
+</script>

@@ -1,0 +1,17 @@
+{
+  "id": "system-stats",
+  "name": "System Stats",
+  "version": "1.0.0",
+  "description": "Live CPU, memory, activity level, and shell state via the SDK bridge.",
+  "author": "Moltamp",
+  "sizing": "normal",
+  "agents": ["*"],
+  "api": {
+    "ipc": ["system.getStats"],
+    "stores": ["telemetry.activity"],
+    "keyboard": false,
+    "shellState": true,
+    "audio": false,
+    "localAssets": false
+  }
+}
