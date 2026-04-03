@@ -107,6 +107,36 @@ Your widget is a self-contained HTML page. It runs in a sandboxed iframe. You ge
 
 ---
 
+## Sandbox Environment
+
+Widgets run in a **sandboxed iframe**. Understanding what's available and what's blocked will save you debugging time.
+
+**Available:**
+- Full DOM API (`document.createElement`, `getElementById`, etc.)
+- `<canvas>` 2D context
+- `requestAnimationFrame`
+- `setTimeout`, `setInterval` (but prefer `moltamp.poll()` — it auto-cleans up)
+- `addEventListener` for keyboard, mouse, touch, and `message` events
+- CSS variables from the active skin (injected by host)
+- The `moltamp` SDK object on `window`
+
+**Blocked:**
+- `fetch()`, `XMLHttpRequest`, `WebSocket` — no network access
+- `window.parent`, `window.top`, `parent.postMessage` — cross-origin blocked; the SDK bridges this for you
+- ES modules (`import`, `<script type="module">`) — not supported
+- `localStorage`, `sessionStorage` — use `moltamp.settings` instead
+- `document.cookie` — sandboxed out
+- Clipboard API — sandboxed
+- Geolocation, camera, microphone — sandboxed
+
+**Available but use with caution:**
+- `new Audio()` — only if `api.audio: true` in widget.json
+- `console.log()` — works for debugging but users can't see it
+
+> **Testing locally:** If you open `index.html` directly in a browser, `moltamp` will be undefined and your widget will crash. Widgets must be loaded inside MOLTamp to work. There is no standalone test harness.
+
+---
+
 ## SDK Reference
 
 The `moltamp` object is available globally. No imports needed. The SDK is auto-injected by the host.
@@ -293,6 +323,154 @@ This applies to **all** canvas operations: `fillStyle`, `strokeStyle`, `shadowCo
 
 ---
 
+## Common Mistakes
+
+Real-world examples of what breaks and why. If you're using an AI to generate your widget, paste this section as context.
+
+### 1. CSS variables in Canvas (silent render failure)
+
+Canvas 2D context can't parse CSS variables or functions. Nothing renders — no error, just invisible output.
+
+```js
+// BROKEN — ctx silently ignores the value
+ctx.fillStyle = 'var(--t-green)';
+ctx.fillRect(0, 0, 10, 10);  // draws nothing
+
+// BROKEN — color-mix() is CSS-only
+ctx.fillStyle = 'color-mix(in srgb, var(--c-chrome-accent) 68%, white)';
+
+// FIXED — resolve to a computed value first
+function getColor(varName, fallback) {
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue(varName).trim() || fallback;
+}
+ctx.fillStyle = getColor('--t-green', '#00cc66');
+ctx.fillRect(0, 0, 10, 10);  // draws green
+```
+
+### 2. widget.json fields in wrong location (features silently disabled)
+
+```json
+// BROKEN — keyboard at top level, widget never receives key events
+{
+  "id": "my-game",
+  "name": "My Game",
+  "keyboard": true
+}
+
+// FIXED — keyboard nested under api
+{
+  "id": "my-game",
+  "name": "My Game",
+  "api": {
+    "keyboard": true
+  }
+}
+```
+
+### 3. Full HTML document wrapper (style conflicts)
+
+```html
+<!-- BROKEN — host already provides <html>, <head>, <body> with base styles.
+     Adding your own can override the SDK injection and break theming. -->
+<!doctype html>
+<html>
+<head><title>My Widget</title></head>
+<body>
+  <div id="root"></div>
+  <script>/* ... */</script>
+</body>
+</html>
+
+<!-- FIXED — bare fragment, host wraps it for you -->
+<div id="root"></div>
+<style>/* ... */</style>
+<script>/* ... */</script>
+```
+
+### 4. Top-level async/await (syntax error in sandbox)
+
+```js
+// BROKEN — top-level await not supported
+var config = await moltamp.settings.read();
+
+// FIXED — wrap in an IIFE
+(async function() {
+  var config = await moltamp.settings.read();
+  // ... use config
+})();
+```
+
+### 5. Using fetch/XHR for data (blocked by sandbox)
+
+```js
+// BROKEN — network is blocked
+var resp = await fetch('https://api.example.com/data');
+
+// FIXED — use the SDK bridge, data comes from the host process
+var stats = await moltamp.call('system.getStats');
+```
+
+### 6. Using setInterval instead of moltamp.poll (memory leak)
+
+```js
+// WORKS but leaks — interval keeps running after widget unloads
+setInterval(function() { update(); }, 3000);
+
+// BETTER — auto-cleans up when widget is removed
+moltamp.poll(3000, function() { update(); });
+```
+
+### 7. Zip with nested directory (import fails)
+
+```bash
+# BROKEN — zip contains a folder wrapper
+cd ~/widgets
+zip -r my-widget.zip my-widget/
+# Result: my-widget.zip → my-widget/widget.json (WRONG)
+
+# FIXED — zip from inside the widget folder
+cd ~/widgets/my-widget
+zip -r my-widget.zip .
+# Result: my-widget.zip → widget.json (RIGHT)
+```
+
+### 8. Hardcoded colors (breaks on skin switch)
+
+```js
+// BROKEN — looks fine in one skin, invisible or ugly in others
+ctx.fillStyle = '#4d9fff';
+el.style.color = 'white';
+
+// FIXED — adapts to every skin automatically
+ctx.fillStyle = getColor('--c-chrome-accent', '#4d9fff');
+el.style.color = 'var(--c-chrome-text)';
+```
+
+### 9. Using localStorage (not available)
+
+```js
+// BROKEN — sandboxed out, throws or returns null
+localStorage.setItem('highScore', score);
+
+// FIXED — persists to host filesystem, scoped to your widget ID
+await moltamp.settings.write({ highScore: score });
+```
+
+### 10. Assuming moltamp.settings.read() returns data on first run
+
+```js
+// BROKEN — config is null on first ever load
+var config = await moltamp.settings.read();
+var rate = config.refreshRate;  // TypeError: cannot read property of null
+
+// FIXED — always provide defaults
+var config = (await moltamp.settings.read()) || {};
+var rate = config.refreshRate || 3000;
+```
+
+---
+
 ## Shell State
 
 Listen for Claude's real-time state changes:
@@ -339,17 +517,44 @@ Users install by dropping the zip into **Settings > Tabs > Import Widget...** or
 
 ---
 
+## Pre-Submit Checklist
+
+Run through this before opening a PR. Every item is a real failure mode we've seen.
+
+- [ ] `widget.json` exists with a unique `id` (lowercase, hyphens/underscores only)
+- [ ] `widget.json` has `name` field
+- [ ] `api` features (`keyboard`, `shellState`, etc.) are nested under `"api"`, not top-level
+- [ ] `index.html` has no `<!doctype>`, `<html>`, `<head>`, or `<body>` tags
+- [ ] No `import` statements or `<script type="module">`
+- [ ] No top-level `await` — all async code is in an IIFE
+- [ ] No `fetch()`, `XMLHttpRequest`, or external URLs
+- [ ] No `localStorage` / `sessionStorage` — uses `moltamp.settings` instead
+- [ ] No hardcoded colors — all colors use `var(--c-*)` or `var(--t-*)` theme variables
+- [ ] If using `<canvas>`: all `fillStyle`/`strokeStyle` values are resolved via `getComputedStyle()`, never raw `var()` strings
+- [ ] No `color-mix()` or other CSS functions passed to canvas context
+- [ ] `moltamp.settings.read()` handles `null` return on first run
+- [ ] Uses `moltamp.poll()` instead of raw `setInterval` for recurring work
+- [ ] Zip contains `widget.json` at the root, not inside a subdirectory
+- [ ] Total file size under 20MB, individual files under 5MB
+- [ ] Tested with at least 2 different skins (one light, one dark)
+
+---
+
 ## Contributing
 
 1. Fork this repo
 2. Add your widget to `widgets/<your-widget>/`
 3. Include a screenshot in your widget's folder
-4. Open a PR with a description of what it does
+4. Run through the [Pre-Submit Checklist](#pre-submit-checklist)
+5. Open a PR with a description of what it does
 
 All widgets are reviewed for:
 - Valid `widget.json` with unique `id`
+- Correct `api` nesting in widget.json
 - No hardcoded colors (uses theme variables)
 - No external network requests
+- Canvas uses resolved colors (not CSS variable strings)
+- Bare HTML fragment (no document wrapper)
 - Reasonable file sizes
 - Works across multiple skins
 
