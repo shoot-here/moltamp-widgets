@@ -46,15 +46,39 @@ my-widget/
 }
 ```
 
-**Rules:**
-- `id` — required. Lowercase, hyphens and underscores only. Must be unique.
-- `name` — required. Display name in the widget picker.
-- `category` — optional. Groups your widget in the picker (e.g., "System", "Media", "Fun").
-- All other fields are optional.
+**Required fields:**
+- `id` — Lowercase, hyphens and underscores only. Must be unique.
+- `name` — Display name in the widget picker.
+
+**Optional fields:**
+- `category` — Groups your widget in the picker (e.g., "System", "Media", "Fun").
+- `version` — Semver string.
+- `description` — One-line description.
+- `author` — Your name.
+- `sizing` — `"normal"` (default) or `"compact"`.
+- `agents` — Array of agent types that can use this widget. `["*"]` for all.
+- `api` — Declares what SDK features your widget uses:
+
+```json
+{
+  "api": {
+    "ipc": ["system.getStats"],
+    "stores": ["telemetry.activity"],
+    "keyboard": true,
+    "shellState": true,
+    "audio": false,
+    "localAssets": false
+  }
+}
+```
+
+> **Important:** `keyboard`, `shellState`, etc. must be nested inside the `api` object — not at the top level of widget.json. If `keyboard` is not declared under `api`, keystroke forwarding won't activate and your widget won't receive key events.
 
 ### index.html
 
 Your widget is a self-contained HTML page. It runs in a sandboxed iframe. You get full HTML/CSS/JS, the `moltamp` SDK on `window.moltamp`, and the active skin's CSS variables.
+
+**Don't wrap in `<!doctype html>`, `<html>`, or `<body>` tags.** The host iframe provides these. Just write a bare `<div>` + `<style>` + `<script>`, like the example below.
 
 ```html
 <div id="root"></div>
@@ -206,6 +230,36 @@ Variables update live when the user switches skins.
 
 ---
 
+## Canvas and CSS Variables
+
+**This is the #1 gotcha for widget authors.** CSS variables like `var(--c-chrome-accent)` work in stylesheets and inline styles, but **Canvas 2D context does not resolve them**. If you pass `'var(--t-green)'` to `ctx.fillStyle`, it silently fails and nothing renders.
+
+You must resolve variables to computed color values before using them on a canvas:
+
+```js
+// Helper — resolve a CSS variable to its computed value
+function getColor(varName, fallback) {
+  var val = getComputedStyle(document.documentElement)
+    .getPropertyValue(varName).trim();
+  return val || fallback;
+}
+
+// WRONG — canvas ignores this, renders nothing
+ctx.fillStyle = 'var(--t-green)';
+
+// WRONG — color-mix() is CSS-only, canvas can't parse it
+ctx.fillStyle = 'color-mix(in srgb, var(--c-chrome-accent) 68%, white)';
+
+// RIGHT — resolved to an actual color like "#00cc66"
+ctx.fillStyle = getColor('--t-green', '#00cc66');
+```
+
+Call `getColor()` inside your draw loop (not once at startup) so colors update when the user switches skins.
+
+This applies to **all** canvas operations: `fillStyle`, `strokeStyle`, `shadowColor`, `createLinearGradient` color stops, etc.
+
+---
+
 ## Dos and Don'ts
 
 ### DO
@@ -232,6 +286,10 @@ Variables update live when the user switches skins.
 - **Don't hardcode pixel sizes for layout.** Use percentages or `flex` so your widget adapts to different panel widths.
 - **Don't poll faster than 1 second.** There's no reason to update more often than that, and it wastes resources.
 - **Don't forget the `widget.json`.** Without it, MOLTamp won't discover your widget.
+- **Don't pass CSS variables to Canvas.** `ctx.fillStyle = 'var(--t-green)'` silently fails. Resolve with `getComputedStyle()` first. See [Canvas and CSS Variables](#canvas-and-css-variables) above.
+- **Don't use `color-mix()` on Canvas.** It's a CSS function — canvas can't parse it. Pre-compute blended colors in JS if you need them.
+- **Don't wrap your HTML in `<!doctype>`, `<html>`, or `<body>`.** The host iframe provides the document structure. Just write bare `<div>` + `<style>` + `<script>`.
+- **Don't put `keyboard: true` at the top level of widget.json.** It must be nested under `"api"` — see [widget.json](#widgetjson) above. Top-level placement is ignored and your widget won't receive key events.
 
 ---
 
@@ -259,7 +317,23 @@ cd ~/Moltamp/widgets/System/my-widget
 zip -r my-widget.zip .
 ```
 
-The zip should contain `widget.json` and `index.html` at the root (not nested in a subdirectory). Assets go in an `assets/` subfolder.
+**Critical:** `widget.json` and `index.html` must be at the **root** of the zip — not nested inside a subdirectory. If your zip contains `my-widget/widget.json` instead of just `widget.json`, the import will fail.
+
+```
+# WRONG — files nested in a folder
+my-widget.zip
+  └── my-widget/
+        ├── widget.json
+        └── index.html
+
+# RIGHT — files at the root
+my-widget.zip
+  ├── widget.json
+  ├── index.html
+  └── assets/
+```
+
+Assets go in an `assets/` subfolder inside the zip.
 
 Users install by dropping the zip into **Settings > Tabs > Import Widget...** or manually extracting to `~/Moltamp/widgets/<category>/<name>/`.
 
