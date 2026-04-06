@@ -1,11 +1,7 @@
 <div align="center">
 
-<img src=".github/assets/banner.svg" alt="MOLTamp Widgets" width="100%"/>
-
-<br/>
-
 <a href="https://moltamp.com">
-  <img src=".github/assets/hero-link.png" alt="MOLTamp — Skinnable Shell for AI Terminals" width="720" style="border-radius: 12px; margin: 8px 0;"/>
+  <img src=".github/assets/hero-link.png" alt="MOLTamp — Skinnable Shell for AI Terminals" width="720" style="border-radius: 12px; margin: 16px 0;"/>
 </a>
 
 <br/><br/>
