@@ -1,8 +1,38 @@
-# MOLTamp Widgets
+<div align="center">
 
-Community widgets for [MOLTamp](https://moltamp.com) — the skinnable shell for Claude Code.
+<img src=".github/assets/banner.svg" alt="MOLTamp Widgets" width="100%"/>
 
-Widgets are self-contained HTML pages that run inside MOLTamp's panels. They can display data, respond to Claude's state, and match any skin's look automatically.
+<br/>
+
+<a href="https://moltamp.com">
+  <img src=".github/assets/logo.png" alt="MOLTamp" width="80" style="margin: 16px 0;"/>
+</a>
+
+<br/>
+
+<a href="https://moltamp.com">
+  <img src=".github/assets/hero-link.png" alt="MOLTamp — Skinnable Shell for AI Terminals" width="720" style="border-radius: 12px; margin: 8px 0;"/>
+</a>
+
+<br/><br/>
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-4d9fff.svg?style=flat-square&labelColor=08080a)](LICENSE)
+[![Widgets](https://img.shields.io/badge/widgets-1-22c55e.svg?style=flat-square&labelColor=08080a)](#browse-widgets)
+[![Website](https://img.shields.io/badge/moltamp.com-widgets-ff6b4d.svg?style=flat-square&labelColor=08080a)](https://moltamp.com/widgets/)
+
+**[Download MOLTamp](https://moltamp.com)** &nbsp;&middot;&nbsp; **[Authoring Guide](WIDGETS.md)** &nbsp;&middot;&nbsp; **[Contributing](#contributing)**
+
+</div>
+
+<br/>
+
+## What is MOLTamp?
+
+MOLTamp wraps Claude Code's terminal in a skinnable cockpit UI — vibes panel, side panels, telemetry ticker, reactive animations. **Widgets** are self-contained HTML pages that run inside MOLTamp's panels. They can display data, respond to Claude's state, and match any skin's look automatically.
+
+> Self-contained HTML. Full SDK access. Skin-aware by default.
+
+<br/>
 
 ## Install a Widget
 
@@ -12,6 +42,8 @@ Widgets are self-contained HTML pages that run inside MOLTamp's panels. They can
 
 **Or manually:** unzip to `~/Moltamp/widgets/<category>/<widget-name>/` and restart.
 
+<br/>
+
 ## Browse Widgets
 
 | Widget | Category | Description |
@@ -20,7 +52,7 @@ Widgets are self-contained HTML pages that run inside MOLTamp's panels. They can
 
 *Submit yours via PR.*
 
----
+<br/>
 
 ## Build Your Own Widget
 
@@ -35,7 +67,7 @@ my-widget/
   assets/           <- optional images, fonts
 ```
 
----
+<br/>
 
 ## Contributing
 
@@ -55,8 +87,16 @@ All widgets are reviewed for:
 - Reasonable file sizes
 - Works across multiple skins
 
----
+<br/>
 
-## License
+<div align="center">
 
-MIT
+<a href="https://moltamp.com">
+  <img src=".github/assets/logo.png" alt="MOLTamp" width="32"/>
+</a>
+
+<br/>
+
+<sub>Made for the community by <a href="https://moltamp.com">MOLTamp</a></sub>
+
+</div>

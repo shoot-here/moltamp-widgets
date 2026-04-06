@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="220" viewBox="0 0 900 220">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#08080a"/>
+      <stop offset="40%" stop-color="#0e0e14"/>
+      <stop offset="100%" stop-color="#08080a"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#4d9fff"/>
+      <stop offset="100%" stop-color="#ff6b4d"/>
+    </linearGradient>
+    <linearGradient id="titleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f0f0f2"/>
+      <stop offset="60%" stop-color="#e0e0ea"/>
+      <stop offset="100%" stop-color="#d0d0de"/>
+    </linearGradient>
+    <linearGradient id="subtitleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#22c55e"/>
+      <stop offset="100%" stop-color="#4d9fff"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="accentGlow">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="900" height="220" fill="url(#bg)"/>
+
+  <g opacity="0.03" stroke="#4d9fff">
+    <line x1="0" y1="44" x2="900" y2="44"/>
+    <line x1="0" y1="88" x2="900" y2="88"/>
+    <line x1="0" y1="132" x2="900" y2="132"/>
+    <line x1="0" y1="176" x2="900" y2="176"/>
+    <line x1="150" y1="0" x2="150" y2="220"/>
+    <line x1="300" y1="0" x2="300" y2="220"/>
+    <line x1="450" y1="0" x2="450" y2="220"/>
+    <line x1="600" y1="0" x2="600" y2="220"/>
+    <line x1="750" y1="0" x2="750" y2="220"/>
+  </g>
+
+  <rect x="0" y="0" width="900" height="2" fill="url(#accent)" opacity="0.7"/>
+
+  <ellipse cx="450" cy="110" rx="200" ry="80" fill="#22c55e" opacity="0.03"/>
+
+  <circle cx="350" cy="85" r="28" fill="none" stroke="#ff6b4d" stroke-width="1.5" opacity="0.25" filter="url(#accentGlow)"/>
+  <text x="350" y="93" text-anchor="middle" font-family="'SF Mono', 'JetBrains Mono', monospace" font-size="26" font-weight="700" fill="#ff6b4d" opacity="0.9" filter="url(#glow)">&#x26A1;</text>
+
+  <text x="405" y="95" font-family="'Syne', 'Inter', 'SF Pro Display', -apple-system, sans-serif" font-size="44" font-weight="800" fill="url(#titleGrad)" letter-spacing="-1">MOLTamp</text>
+
+  <text x="450" y="128" text-anchor="middle" font-family="'Inter', 'SF Pro Display', -apple-system, sans-serif" font-size="15" fill="url(#subtitleGrad)" letter-spacing="8" font-weight="600">WIDGETS</text>
+
+  <text x="450" y="162" text-anchor="middle" font-family="'Inter', 'SF Pro Display', -apple-system, sans-serif" font-size="13" fill="#8a8a96" letter-spacing="0.5">Community widgets for the skinnable AI terminal</text>
+
+  <g opacity="0.2">
+    <path d="M24 24 L24 44 M24 24 L44 24" stroke="#4d9fff" stroke-width="1.5" fill="none"/>
+    <path d="M876 24 L876 44 M876 24 L856 24" stroke="#ff6b4d" stroke-width="1.5" fill="none"/>
+    <path d="M24 196 L24 176 M24 196 L44 196" stroke="#4d9fff" stroke-width="1.5" fill="none" opacity="0.6"/>
+    <path d="M876 196 L876 176 M876 196 L856 196" stroke="#ff6b4d" stroke-width="1.5" fill="none" opacity="0.6"/>
+  </g>
+
+  <rect x="0" y="218" width="900" height="2" fill="url(#accent)" opacity="0.35"/>
+</svg>
