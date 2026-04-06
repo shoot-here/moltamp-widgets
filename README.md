@@ -5,12 +5,6 @@
 <br/>
 
 <a href="https://moltamp.com">
-  <img src=".github/assets/logo.png" alt="MOLTamp" width="80" style="margin: 16px 0;"/>
-</a>
-
-<br/>
-
-<a href="https://moltamp.com">
   <img src=".github/assets/hero-link.png" alt="MOLTamp — Skinnable Shell for AI Terminals" width="720" style="border-radius: 12px; margin: 8px 0;"/>
 </a>
 
