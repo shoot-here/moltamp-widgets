@@ -21,6 +21,35 @@ Copy `_template/` from the project's `widgets/` folder for a working example.
 
 ---
 
+## Where Widgets Live
+
+```
+┌─────────────────────────────────────┐
+│  TITLEBAR                           │
+├─────────────────────────────────────┤
+│  VIBES (widgets can go here too)    │
+├────────┬────────────────┬───────────┤
+│  LEFT  │   TERMINAL     │  RIGHT    │
+│  Panel │                │  Panel    │
+│ ┌────┐ │                │ ┌───────┐ │
+│ │WIDG│ │                │ │WIDGET │ │
+│ │ ET │ │                │ │       │ │
+│ └────┘ │                │ └───────┘ │
+│ ┌────┐ │                │ ┌───────┐ │
+│ │WIDG│ │                │ │WIDGET │ │
+│ │ ET │ │                │ │       │ │
+│ └────┘ │                │ └───────┘ │
+├────────┴────────────────┴───────────┤
+│  BOTTOM                             │
+└─────────────────────────────────────┘
+```
+
+Widgets are placed inside **panel tabs**. Users drag widgets between tabs in Settings. Skins ship a `defaultLayout` that determines which widgets appear where by default.
+
+Your widget can appear in any tab in any panel -- left, right, or vibes. The terminal area in the center is not available for widgets. The user controls placement; you just build the widget and it works wherever they put it.
+
+---
+
 ## widget.json
 
 ```json
@@ -32,7 +61,7 @@ Copy `_template/` from the project's `widgets/` folder for a working example.
   "author": "Your Name",
   "category": "Custom",
   "sizing": "normal",
-  "agents": ["*"]
+  "agent": "*"
 }
 ```
 
@@ -44,12 +73,28 @@ Copy `_template/` from the project's `widgets/` folder for a working example.
 | `description` | no | One-liner for the picker tooltip. |
 | `author` | no | Your name. Default `User`. |
 | `category` | no | Groups your widget in the picker (e.g., `System`, `Media`, `Fun`). |
-| `sizing` | no | `"normal"` (collapsible) or `"full"` (fills panel). Default `normal`. |
-| `agents` | no | Which agents this widget works with. `["*"]` = all, `["claude"]` = Claude only. Default `["*"]`. |
+| `sizing` | no | `"normal"` or `"fill"`. Default `"normal"`. See [Sizing](#sizing). |
+| `agent` | no | Which agent this widget works with. `"*"` = all agents, `"claude"` = Claude only. Default `"*"`. See [Agent Filtering](#agent-filtering). |
+
+### Sizing
+
+The `sizing` field controls how your widget occupies space within a tab.
+
+- **`"normal"`** (default): Widget takes its natural height based on content. Stacks vertically with other widgets in the tab. Most widgets use this.
+- **`"fill"`**: Widget expands to fill all available space in the tab. Use for widgets that need maximum canvas area -- visualizers, live2d, full-panel experiences. Only one fill widget per tab; if multiple fill widgets are in the same tab, they split the space evenly.
+
+### Agent Filtering
+
+The `agent` field controls which AI agents your widget appears for in the widget picker.
+
+- **`"*"`** (default): Widget works with any AI agent (Claude, GPT, Gemini, etc.). Most widgets should use this.
+- **`"claude"`**: Widget only appears when the active session is a Claude agent. Use this if your widget relies on Claude-specific features (e.g., Claude's status line data via `stats.read`).
+
+The agent filter controls visibility in the widget picker -- widgets for non-matching agents are hidden, not broken. Unless your widget genuinely depends on agent-specific data, use `"*"`.
 
 ### The `api` field
 
-Declares what SDK features your widget uses. **Must be nested under `"api"`** — top-level placement is silently ignored.
+Declares what SDK features your widget uses. **Must be nested under `"api"`** -- top-level placement is silently ignored.
 
 ```json
 {
@@ -65,6 +110,39 @@ Declares what SDK features your widget uses. **Must be nested under `"api"`** �
 ```
 
 > **Important:** If `keyboard` is not declared under `api`, keystroke forwarding won't activate and your widget won't receive key events.
+
+### Local Assets
+
+Set `api.localAssets: true` to reference files from your widget's own `assets/` directory. Asset paths are resolved to `file://` URLs at load time.
+
+Reference assets in HTML:
+```html
+<img src="assets/icon.png">
+```
+
+Reference assets in CSS:
+```css
+.logo { background-image: url('./assets/icon.png'); }
+```
+
+Without `localAssets: true`, asset paths are not resolved and images won't load.
+
+**Supported formats:** PNG, JPG, WebP, GIF, SVG (same as skins).
+**File limits:** 5MB per file, 20MB total per widget.
+
+### Audio
+
+Set `api.audio: true` to enable audio playback within your widget. You can create `new Audio()` objects and play sound files bundled in your `assets/` folder.
+
+```js
+var sound = new Audio('assets/ping.mp3');
+sound.play();
+```
+
+- Audio files must be local (bundled in `assets/`) -- no external URLs.
+- `api.audio: false` (default): `new Audio()` will be blocked by the sandbox.
+- Use sparingly -- unexpected sounds from widgets are disruptive.
+- **Supported formats:** MP3, WAV, OGG, AAC.
 
 ---
 
@@ -104,6 +182,22 @@ Your widget is a self-contained HTML page rendered in a sandboxed iframe. You ge
 
 ---
 
+## Widget Lifecycle
+
+Understanding when your widget is created, visible, hidden, and destroyed helps you write robust code.
+
+**Load:** Widget iframe is created when the user navigates to the tab containing it, or when MOLTamp starts with the tab visible. The `moltamp` SDK is injected before your `<script>` runs.
+
+**Visible:** Widget is fully interactive. Polls, subscriptions, and animations run normally.
+
+**Hidden:** When the user switches to a different tab, your widget's iframe stays alive but is hidden. `moltamp.poll()` intervals continue running. Design your widget to handle this gracefully -- don't assume you're always visible.
+
+**Unload:** Widget iframe is destroyed when the user removes the widget from a tab, or when MOLTamp quits. `moltamp.poll()` intervals are auto-cleaned. No explicit cleanup callback exists -- if you need cleanup, listen for `beforeunload`.
+
+**Skin Switch:** When the user changes skins, CSS variables update live via the host. Your widget receives new theme colors automatically. If you're using resolved colors (for Canvas), re-resolve them on the next draw.
+
+---
+
 ## Sandbox Environment
 
 Widgets run in a **sandboxed iframe** with `allow-scripts` only. Understanding what's available and what's blocked will save you debugging time.
@@ -112,24 +206,24 @@ Widgets run in a **sandboxed iframe** with `allow-scripts` only. Understanding w
 - Full DOM API (`document.createElement`, `getElementById`, etc.)
 - `<canvas>` 2D context
 - `requestAnimationFrame`
-- `setTimeout`, `setInterval` (but prefer `moltamp.poll()` — it auto-cleans up)
+- `setTimeout`, `setInterval` (but prefer `moltamp.poll()` -- it auto-cleans up)
 - `addEventListener` for keyboard, mouse, touch, and `message` events
 - CSS variables from the active skin (injected by host)
 - The `moltamp` SDK object on `window`
 
 **Blocked:**
-- `fetch()`, `XMLHttpRequest`, `WebSocket` — no network access
-- `window.parent`, `window.top`, `parent.postMessage` — cross-origin blocked; the SDK bridges this for you
-- ES modules (`import`, `<script type="module">`) — not supported
-- `localStorage`, `sessionStorage` — use `moltamp.settings` instead
-- `document.cookie` — sandboxed out
-- Clipboard API — sandboxed
-- Geolocation, camera, microphone — sandboxed
-- Forms submission, popups, navigation — sandboxed
+- `fetch()`, `XMLHttpRequest`, `WebSocket` -- no network access
+- `window.parent`, `window.top`, `parent.postMessage` -- cross-origin blocked; the SDK bridges this for you
+- ES modules (`import`, `<script type="module">`) -- not supported
+- `localStorage`, `sessionStorage` -- use `moltamp.settings` instead
+- `document.cookie` -- sandboxed out
+- Clipboard API -- sandboxed
+- Geolocation, camera, microphone -- sandboxed
+- Forms submission, popups, navigation -- sandboxed
 
 **Available but use with caution:**
-- `new Audio()` — only if `api.audio: true` in widget.json
-- `console.log()` — works for debugging but users can't see it
+- `new Audio()` -- only if `api.audio: true` in widget.json
+- `console.log()` -- works for debugging but users can't see it
 
 > **Testing locally:** If you open `index.html` directly in a browser, `moltamp` will be undefined and your widget will crash. Widgets must be loaded inside Moltamp to work. There is no standalone test harness.
 
@@ -152,16 +246,16 @@ var stats = await moltamp.call('system.getStats');
 
 **Available channels:**
 
-| Channel | Description | Returns |
-|---------|-------------|---------|
-| `system.getStats` | CPU and memory stats | `{ cpu, memory, uptime }` |
-| `system.weather` | Weather (pass location string) | Weather data |
-| `music.nowPlaying` | Current track info | Track object |
-| `music.playPause` | Toggle playback | — |
-| `music.next` | Next track | — |
-| `music.previous` | Previous track | — |
-| `telemetry.read` | PTY telemetry | Telemetry data |
-| `stats.read` | Session statistics | Stats object |
+| Channel | Args | Returns | Description |
+|---------|------|---------|-------------|
+| `system.getStats` | none | `{ cpu: { cores, usagePct, loadAvg1m, loadAvg5m }, memory: { totalBytes, freeBytes, usedBytes, usagePct }, uptime }` | System resource stats |
+| `system.weather` | `location: string` (e.g., `"Denver, CO"`) | `{ temp, feelsLike, humidity, condition, icon, wind, city }` | Weather data. Location is saved per-widget. |
+| `music.nowPlaying` | none | `{ title, artist, album, artworkUrl, duration, position, isPlaying } \| null` | Current track from system media. `null` if nothing playing. |
+| `music.playPause` | none | `void` | Toggle media playback |
+| `music.next` | none | `void` | Skip to next track |
+| `music.previous` | none | `void` | Skip to previous track |
+| `telemetry.read` | none | `{ bytesPerSec, peakBytesPerSec, bytesIn, bytesOut, uptime, activity }` | PTY telemetry data |
+| `stats.read` | none | `{ model, contextPct, cost, tokensIn, tokensOut, cacheRead, cacheWrite, apiTime, agents, rate5h, rate7d }` | Session statistics from Claude's status line |
 
 Unlisted channels are rejected. Timeout: 10 seconds.
 
@@ -189,7 +283,7 @@ var unsub = moltamp.subscribe('telemetry', 'activity', function(level) {
 
 ### moltamp.settings
 
-Persist widget-specific configuration. Scoped to your widget ID — won't collide with other widgets.
+Persist widget-specific configuration. Scoped to your widget ID -- won't collide with other widgets.
 
 ```js
 // Save
@@ -211,8 +305,8 @@ var row = moltamp.el('div', { display: 'flex', gap: '8px' }, [
 ]);
 ```
 
-- `styles` — object of camelCase CSS properties
-- `children` — string, element, or array of either
+- `styles` -- object of camelCase CSS properties
+- `children` -- string, element, or array of either
 
 ### moltamp.poll(ms, fn) -> cancel
 
@@ -249,9 +343,9 @@ moltamp.onKeyDown(function(key, code, modifiers) {
 ### moltamp.meta
 
 Widget metadata set by the host:
-- `moltamp.meta.id` — your widget's ID
-- `moltamp.meta.name` — your widget's display name
-- `moltamp.meta.context` — `"panel"` or `"vibes"`
+- `moltamp.meta.id` -- your widget's ID
+- `moltamp.meta.name` -- your widget's display name
+- `moltamp.meta.context` -- `"panel"` or `"vibes"`
 
 ---
 
@@ -285,20 +379,20 @@ Variables update live when the user switches skins.
 You must resolve variables to computed color values before using them on a canvas:
 
 ```js
-// Helper — resolve a CSS variable to its computed value
+// Helper -- resolve a CSS variable to its computed value
 function getColor(varName, fallback) {
   var val = getComputedStyle(document.documentElement)
     .getPropertyValue(varName).trim();
   return val || fallback;
 }
 
-// WRONG — canvas ignores this, renders nothing
+// WRONG -- canvas ignores this, renders nothing
 ctx.fillStyle = 'var(--t-green)';
 
-// WRONG — color-mix() is CSS-only, canvas can't parse it
+// WRONG -- color-mix() is CSS-only, canvas can't parse it
 ctx.fillStyle = 'color-mix(in srgb, var(--c-chrome-accent) 68%, white)';
 
-// RIGHT — resolved to an actual color like "#00cc66"
+// RIGHT -- resolved to an actual color like "#00cc66"
 ctx.fillStyle = getColor('--t-green', '#00cc66');
 ```
 
@@ -323,6 +417,45 @@ window.addEventListener('message', function(e) {
 
 ---
 
+## Responsive Design
+
+Widgets can appear in panels of varying width (160px to 400px+) and in the vibes panel (full width, limited height). Design your widget to adapt.
+
+**Check your context:** Use `moltamp.meta.context` to know where your widget is placed:
+- `"panel"` -- side panel tab (left or right). Narrow width, full height.
+- `"vibes"` -- top banner. Full window width, limited height.
+
+**For panel context:** Design for ~200px width as a baseline. Use `width: 100%` and `flex` for fluid layouts. Avoid fixed pixel widths.
+
+**For vibes context:** You have full window width but limited height. Design horizontally.
+
+**Background color:** Use CSS `var(--c-chrome-bg)` as your background -- it matches the panel, not the terminal.
+
+**Test by resizing:** Drag the panel resize handle in MOLTamp. Does your widget adapt or break? If text wraps awkwardly or elements overflow, adjust your layout.
+
+---
+
+## Inter-Widget Communication
+
+Widgets cannot communicate directly with each other. Each runs in its own sandboxed iframe.
+
+If you need shared state, use `moltamp.subscribe()` to read from Moltamp's stores -- these are the shared data source. Two widgets subscribing to the same store/selector will both receive the same updates.
+
+There is no widget-to-widget message passing, and there is no way to access another widget's DOM or state.
+
+---
+
+## Skin-Bundled Widgets
+
+Widgets can be bundled inside a skin at `~/Moltamp/skins/<skin>/widgets/<category>/<widget>/`. Skin-bundled widgets appear only when that skin is active.
+
+- They take priority over global widgets with the same ID.
+- Use this when your widget is designed specifically for one skin's aesthetic or data.
+- Example: A skin-specific "mission status" widget that only makes sense in a Star Trek LCARS skin.
+- Global widgets (in `~/Moltamp/widgets/`) are always available regardless of active skin.
+
+---
+
 ## File Structure
 
 ```
@@ -342,9 +475,30 @@ window.addEventListener('message', function(e) {
         ball.png
 ```
 
-The **category folder** (`System`, `Fun`, etc.) is the grouping shown in the widget picker. Name it whatever you want.
+The **category folder** (`System`, `Fun`, etc.) is the grouping shown in the widget picker. Name it whatever you want. Category folders are recommended but optional -- a widget placed directly in `~/Moltamp/widgets/my-widget/` will still be discovered.
 
-**Skin-bundled widgets** can also live inside a skin at `~/Moltamp/skins/<skin>/widgets/<category>/<widget>/`. These take priority over global widgets with the same ID.
+---
+
+## Debugging
+
+`console.log()` works inside widgets but output goes to MOLTamp's main DevTools console.
+
+**Open DevTools:** Cmd+Shift+I (macOS) in MOLTamp. Your widget runs in a sandboxed iframe -- you'll see console output labeled with the widget's origin.
+
+**Common debugging pattern:** Log your SDK calls and their responses.
+
+```js
+var stats = await moltamp.call('system.getStats');
+console.log('[my-widget] stats:', JSON.stringify(stats));
+```
+
+**If your widget is blank:** Check the Console for errors. Common causes:
+- Top-level `await` (syntax error in sandbox)
+- Missing `moltamp` object (running outside MOLTamp)
+- `fetch()` calls (blocked by sandbox)
+- `<!doctype>` / `<html>` / `<body>` wrapper conflicting with host document
+
+**If your widget loads but doesn't update:** Check that `moltamp.poll()` is running and your callback isn't throwing. A thrown error inside `poll()` silently stops updates.
 
 ---
 
@@ -357,16 +511,16 @@ cd ~/Moltamp/widgets/System/my-widget
 zip -r my-widget.zip .
 ```
 
-**Critical:** `widget.json` and `index.html` must be at the **root** of the zip — not nested inside a subdirectory. If your zip contains `my-widget/widget.json` instead of just `widget.json`, the import will fail.
+**Critical:** `widget.json` and `index.html` must be at the **root** of the zip -- not nested inside a subdirectory. If your zip contains `my-widget/widget.json` instead of just `widget.json`, the import will fail.
 
 ```
-# WRONG — files nested in a folder
+# WRONG -- files nested in a folder
 my-widget.zip
   └── my-widget/
         ├── widget.json
         └── index.html
 
-# RIGHT — files at the root
+# RIGHT -- files at the root
 my-widget.zip
   ├── widget.json
   ├── index.html
@@ -399,14 +553,14 @@ Users install by dropping the zip into **Settings > Tabs > Import Widget...** or
 - **Don't use `fetch()` or `XMLHttpRequest`.** Sandboxed. Use `moltamp.call()` for data.
 - **Don't try to access `window.parent`.** Sandboxed. Use the SDK's `postMessage` bridge.
 - **Don't use `document.write()`.** It will blank your widget. Use `moltamp.el()` or standard DOM APIs.
-- **Don't set `overflow: auto` on body.** The host sets `overflow: hidden`. Widgets shouldn't scroll — if your content doesn't fit, make it smaller.
+- **Don't set `overflow: auto` on body.** The host sets `overflow: hidden`. Widgets shouldn't scroll -- if your content doesn't fit, make it smaller.
 - **Don't use ES modules or `import`.** The iframe doesn't support module scripts. Use plain `<script>` tags with vanilla JS.
 - **Don't use `async/await` at the top level.** Wrap async code in an IIFE: `(async function() { ... })();`
 - **Don't hardcode pixel sizes for layout.** Use percentages or `flex` so your widget adapts to different panel widths.
 - **Don't poll faster than 1 second.** There's no reason to update more often than that, and it wastes resources.
 - **Don't forget the `widget.json`.** Without it, Moltamp won't discover your widget.
 - **Don't pass CSS variables to Canvas.** `ctx.fillStyle = 'var(--t-green)'` silently fails. Resolve with `getComputedStyle()` first. See [Canvas and CSS Variables](#canvas-and-css-variables).
-- **Don't use `color-mix()` on Canvas.** It's a CSS function — canvas can't parse it. Pre-compute blended colors in JS if you need them.
+- **Don't use `color-mix()` on Canvas.** It's a CSS function -- canvas can't parse it. Pre-compute blended colors in JS if you need them.
 - **Don't wrap your HTML in `<!doctype>`, `<html>`, or `<body>`.** The host iframe provides the document structure. Just write bare `<div>` + `<style>` + `<script>`.
 - **Don't put `keyboard: true` at the top level of widget.json.** It must be nested under `"api"`. Top-level placement is ignored and your widget won't receive key events.
 
@@ -418,17 +572,17 @@ Real-world examples of what breaks and why. If you're using an AI to generate yo
 
 ### 1. CSS variables in Canvas (silent render failure)
 
-Canvas 2D context can't parse CSS variables or functions. Nothing renders — no error, just invisible output.
+Canvas 2D context can't parse CSS variables or functions. Nothing renders -- no error, just invisible output.
 
 ```js
-// BROKEN — ctx silently ignores the value
+// BROKEN -- ctx silently ignores the value
 ctx.fillStyle = 'var(--t-green)';
 ctx.fillRect(0, 0, 10, 10);  // draws nothing
 
-// BROKEN — color-mix() is CSS-only
+// BROKEN -- color-mix() is CSS-only
 ctx.fillStyle = 'color-mix(in srgb, var(--c-chrome-accent) 68%, white)';
 
-// FIXED — resolve to a computed value first
+// FIXED -- resolve to a computed value first
 function getColor(varName, fallback) {
   return getComputedStyle(document.documentElement)
     .getPropertyValue(varName).trim() || fallback;
@@ -440,14 +594,14 @@ ctx.fillRect(0, 0, 10, 10);  // draws green
 ### 2. widget.json fields in wrong location (features silently disabled)
 
 ```json
-// BROKEN — keyboard at top level, widget never receives key events
+// BROKEN -- keyboard at top level, widget never receives key events
 {
   "id": "my-game",
   "name": "My Game",
   "keyboard": true
 }
 
-// FIXED — keyboard nested under api
+// FIXED -- keyboard nested under api
 {
   "id": "my-game",
   "name": "My Game",
@@ -460,7 +614,7 @@ ctx.fillRect(0, 0, 10, 10);  // draws green
 ### 3. Full HTML document wrapper (style conflicts)
 
 ```html
-<!-- BROKEN — host already provides <html>, <head>, <body> with base styles.
+<!-- BROKEN -- host already provides <html>, <head>, <body> with base styles.
      Adding your own can override the SDK injection and break theming. -->
 <!doctype html>
 <html>
@@ -471,7 +625,7 @@ ctx.fillRect(0, 0, 10, 10);  // draws green
 </body>
 </html>
 
-<!-- FIXED — bare fragment, host wraps it for you -->
+<!-- FIXED -- bare fragment, host wraps it for you -->
 <div id="root"></div>
 <style>/* ... */</style>
 <script>/* ... */</script>
@@ -480,10 +634,10 @@ ctx.fillRect(0, 0, 10, 10);  // draws green
 ### 4. Top-level async/await (syntax error in sandbox)
 
 ```js
-// BROKEN — top-level await not supported
+// BROKEN -- top-level await not supported
 var config = await moltamp.settings.read();
 
-// FIXED — wrap in an IIFE
+// FIXED -- wrap in an IIFE
 (async function() {
   var config = await moltamp.settings.read();
   // ... use config
@@ -493,45 +647,45 @@ var config = await moltamp.settings.read();
 ### 5. Using fetch/XHR for data (blocked by sandbox)
 
 ```js
-// BROKEN — network is blocked
+// BROKEN -- network is blocked
 var resp = await fetch('https://api.example.com/data');
 
-// FIXED — use the SDK bridge, data comes from the host process
+// FIXED -- use the SDK bridge, data comes from the host process
 var stats = await moltamp.call('system.getStats');
 ```
 
 ### 6. Using setInterval instead of moltamp.poll (memory leak)
 
 ```js
-// WORKS but leaks — interval keeps running after widget unloads
+// WORKS but leaks -- interval keeps running after widget unloads
 setInterval(function() { update(); }, 3000);
 
-// BETTER — auto-cleans up when widget is removed
+// BETTER -- auto-cleans up when widget is removed
 moltamp.poll(3000, function() { update(); });
 ```
 
 ### 7. Zip with nested directory (import fails)
 
 ```bash
-# BROKEN — zip contains a folder wrapper
+# BROKEN -- zip contains a folder wrapper
 cd ~/widgets
 zip -r my-widget.zip my-widget/
-# Result: my-widget.zip → my-widget/widget.json (WRONG)
+# Result: my-widget.zip -> my-widget/widget.json (WRONG)
 
-# FIXED — zip from inside the widget folder
+# FIXED -- zip from inside the widget folder
 cd ~/widgets/my-widget
 zip -r my-widget.zip .
-# Result: my-widget.zip → widget.json (RIGHT)
+# Result: my-widget.zip -> widget.json (RIGHT)
 ```
 
 ### 8. Hardcoded colors (breaks on skin switch)
 
 ```js
-// BROKEN — looks fine in one skin, invisible or ugly in others
+// BROKEN -- looks fine in one skin, invisible or ugly in others
 ctx.fillStyle = '#4d9fff';
 el.style.color = 'white';
 
-// FIXED — adapts to every skin automatically
+// FIXED -- adapts to every skin automatically
 ctx.fillStyle = getColor('--c-chrome-accent', '#4d9fff');
 el.style.color = 'var(--c-chrome-text)';
 ```
@@ -539,24 +693,37 @@ el.style.color = 'var(--c-chrome-text)';
 ### 9. Using localStorage (not available)
 
 ```js
-// BROKEN — sandboxed out, throws or returns null
+// BROKEN -- sandboxed out, throws or returns null
 localStorage.setItem('highScore', score);
 
-// FIXED — persists to host filesystem, scoped to your widget ID
+// FIXED -- persists to host filesystem, scoped to your widget ID
 await moltamp.settings.write({ highScore: score });
 ```
 
 ### 10. Assuming moltamp.settings.read() returns data on first run
 
 ```js
-// BROKEN — config is null on first ever load
+// BROKEN -- config is null on first ever load
 var config = await moltamp.settings.read();
 var rate = config.refreshRate;  // TypeError: cannot read property of null
 
-// FIXED — always provide defaults
+// FIXED -- always provide defaults
 var config = (await moltamp.settings.read()) || {};
 var rate = config.refreshRate || 3000;
 ```
+
+---
+
+## Submitting Your Widget
+
+Ready to share your widget with the community?
+
+1. Fork the [moltamp-widgets](https://github.com/moltamp/moltamp-widgets) repo.
+2. Create your widget folder in `widgets/<Category>/<your-widget-id>/` (e.g., `widgets/System/my-cpu-monitor/`). The category folder groups your widget in the picker.
+3. Include `widget.json` and `index.html`, plus an optional `assets/` directory.
+4. Run through the [Checklist](#checklist) below.
+5. Open a PR using the submission template.
+6. Reviewers check: loads without errors, uses theme variables, handles missing data, doesn't poll too aggressively, respects sandbox constraints.
 
 ---
 
@@ -569,14 +736,15 @@ Before sharing your widget:
 - [ ] `api` features (`keyboard`, `shellState`, etc.) are nested under `"api"`, not top-level
 - [ ] `index.html` has no `<!doctype>`, `<html>`, `<head>`, or `<body>` tags
 - [ ] No `import` statements or `<script type="module">`
-- [ ] No top-level `await` — all async code is in an IIFE
+- [ ] No top-level `await` -- all async code is in an IIFE
 - [ ] No `fetch()`, `XMLHttpRequest`, or external URLs
-- [ ] No `localStorage` / `sessionStorage` — uses `moltamp.settings` instead
-- [ ] No hardcoded colors — all colors use `var(--c-*)` or `var(--t-*)` theme variables
+- [ ] No `localStorage` / `sessionStorage` -- uses `moltamp.settings` instead
+- [ ] No hardcoded colors -- all colors use `var(--c-*)` or `var(--t-*)` theme variables
 - [ ] If using `<canvas>`: all `fillStyle`/`strokeStyle` values are resolved via `getComputedStyle()`, never raw `var()` strings
 - [ ] No `color-mix()` or other CSS functions passed to canvas context
 - [ ] `moltamp.settings.read()` handles `null` return on first run
 - [ ] Uses `moltamp.poll()` instead of raw `setInterval` for recurring work
+- [ ] Poll rate >= 1 second (3 seconds recommended)
 - [ ] Zip contains `widget.json` at the root, not inside a subdirectory
 - [ ] Total file size under 20MB, individual files under 5MB
 - [ ] Tested with at least 2 different skins (one light, one dark)
