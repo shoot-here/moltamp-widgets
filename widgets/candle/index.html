@@ -1,0 +1,484 @@
+<!--
+  Moltamp Candle Widget
+  Flickering candle with realistic flame physics.
+  Flame reacts to shell activity. Candle melts over time.
+  NEW CANDLE resets the wax.
+-->
+
+<div id="root"></div>
+
+<style>
+  #root {
+    container-type: inline-size;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px;
+    height: 100%;
+    box-sizing: border-box;
+    user-select: none;
+  }
+  canvas {
+    border: 1px solid var(--c-chrome-border);
+    image-rendering: auto;
+  }
+  .ctrl-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+    align-items: center;
+    justify-content: center;
+  }
+  .ctrl-btn {
+    background: none;
+    border: 1px solid var(--c-chrome-border);
+    color: var(--c-chrome-dim);
+    font-size: clamp(7px, 2.5cqw, 11px);
+    padding: 1px 5px;
+    cursor: pointer;
+    border-radius: 2px;
+    font-family: inherit;
+    line-height: 1.4;
+  }
+  .ctrl-btn:hover {
+    color: var(--c-chrome-accent);
+    border-color: var(--c-chrome-accent);
+  }
+</style>
+
+<script>
+(function() {
+  var root = document.getElementById('root');
+  var el = moltamp.el;
+
+  // ── Constants ─────────────────────────────────────────────
+
+  var W = 160;
+  var H = 200;
+  var CANDLE_WIDTH = 20;
+  var CANDLE_MAX_HEIGHT = 80;
+  var CANDLE_MIN_HEIGHT = 12;
+  var MELT_INTERVAL_MS = 10 * 60 * 1000; // 1px per 10 minutes
+  var TOTAL_MELT_PX = CANDLE_MAX_HEIGHT - CANDLE_MIN_HEIGHT; // 68px total melt
+  var CANDLE_CENTER_X = W / 2;
+  var WICK_HEIGHT = 8;
+  var LERP_SPEED = 0.04;
+
+  // ── State ─────────────────────────────────────────────────
+
+  var candleHeight = CANDLE_MAX_HEIGHT;
+  var burnStartTime = Date.now();
+  var totalBurnMs = 0;
+  var activityLevel = 'idle';
+
+  // Flame animation targets and current values (smooth lerp)
+  var flameOffsetX = 0;
+  var flameOffsetY = 0;
+  var flameRotation = 0;
+  var flameScale = 1;
+  var targetOffsetX = 0;
+  var targetOffsetY = 0;
+  var targetRotation = 0;
+  var targetScale = 1;
+  var targetChangeTimer = 0;
+  var TARGET_CHANGE_INTERVAL_IDLE = 80;
+  var TARGET_CHANGE_INTERVAL_LOW = 50;
+  var TARGET_CHANGE_INTERVAL_HIGH = 25;
+
+  // ── DOM ───────────────────────────────────────────────────
+
+  var burnLabel = el('span', { color: 'var(--c-chrome-accent)', fontSize: 'clamp(7px, 2.5cqw, 11px)' }, '0h');
+
+  var header = el('div', {
+    display: 'flex',
+    justifyContent: 'space-between',
+    width: W + 'px',
+    marginBottom: '4px',
+    fontSize: 'clamp(7px, 2.5cqw, 11px)',
+    letterSpacing: '0.05em',
+    textTransform: 'uppercase',
+  }, [
+    el('span', { color: 'var(--c-chrome-dim)' }, 'CANDLE'),
+    burnLabel,
+  ]);
+
+  var canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  var ctx = canvas.getContext('2d');
+
+  var newCandleBtn = document.createElement('button');
+  newCandleBtn.className = 'ctrl-btn';
+  newCandleBtn.textContent = 'NEW CANDLE';
+  newCandleBtn.addEventListener('click', function() { resetCandle(); });
+
+  var ctrlRow = el('div', {}, []);
+  ctrlRow.className = 'ctrl-row';
+  ctrlRow.style.width = W + 'px';
+  ctrlRow.appendChild(newCandleBtn);
+
+  root.appendChild(header);
+  root.appendChild(canvas);
+  root.appendChild(ctrlRow);
+
+  // ── Color helpers ─────────────────────────────────────────
+
+  function getColor(varName, fallback) {
+    var val = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+    return val || fallback;
+  }
+
+  function hexToRgb(hex) {
+    hex = hex.replace('#', '');
+    if (hex.length === 3) {
+      hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+    }
+    var num = parseInt(hex, 16);
+    return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+  }
+
+  function parseColor(str) {
+    str = str.trim();
+    if (str.charAt(0) === '#') return hexToRgb(str);
+    var m = str.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+    if (m) return [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])];
+    return [255, 160, 50]; // warm fallback
+  }
+
+  // ── Flame flicker targets ─────────────────────────────────
+
+  function pickNewTargets() {
+    var swayX, swayY, rot, scale;
+
+    if (activityLevel === 'high') {
+      swayX = (Math.random() - 0.5) * 6;
+      swayY = (Math.random() - 0.5) * 8;
+      rot = (Math.random() - 0.5) * 0.18;
+      scale = 0.88 + Math.random() * 0.28;
+    } else if (activityLevel === 'low') {
+      swayX = (Math.random() - 0.5) * 3;
+      swayY = (Math.random() - 0.5) * 5;
+      rot = (Math.random() - 0.5) * 0.1;
+      scale = 0.92 + Math.random() * 0.18;
+    } else {
+      swayX = (Math.random() - 0.5) * 2;
+      swayY = (Math.random() - 0.5) * 3;
+      rot = (Math.random() - 0.5) * 0.06;
+      scale = 0.95 + Math.random() * 0.1;
+    }
+
+    targetOffsetX = swayX;
+    targetOffsetY = swayY;
+    targetRotation = rot;
+    targetScale = scale;
+  }
+
+  // ── Candle melting ────────────────────────────────────────
+
+  function updateMelt() {
+    var meltPx = Math.floor(totalBurnMs / MELT_INTERVAL_MS);
+    candleHeight = Math.max(CANDLE_MIN_HEIGHT, CANDLE_MAX_HEIGHT - meltPx);
+  }
+
+  // ── Drawing ───────────────────────────────────────────────
+
+  function draw() {
+    var bg = getColor('--c-chrome-bg', '#0a0a0a');
+    var textColor = getColor('--c-chrome-text', '#d4d4d4');
+    var accent = getColor('--c-chrome-accent', '#4d9fff');
+    var dim = getColor('--c-chrome-dim', '#666');
+    var tRed = getColor('--t-red', '#e06c75');
+    var tYellow = getColor('--t-yellow', '#e5c07b');
+
+    var rgbText = parseColor(textColor);
+    var rgbRed = parseColor(tRed);
+    var rgbYellow = parseColor(tYellow);
+
+    // Clear
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // ── Positions ──
+
+    var candleBottom = H - 20;
+    var candleTop = candleBottom - candleHeight;
+    var candleLeft = CANDLE_CENTER_X - CANDLE_WIDTH / 2;
+    var candleRight = CANDLE_CENTER_X + CANDLE_WIDTH / 2;
+    var wickBase = candleTop;
+    var wickTip = wickBase - WICK_HEIGHT;
+    var flameBaseY = wickTip;
+
+    // ── Glow ──
+
+    var glowX = CANDLE_CENTER_X + flameOffsetX;
+    var glowY = flameBaseY - 8 + flameOffsetY;
+    var glowRadius = 55 + (flameScale - 1) * 30;
+
+    var grad = ctx.createRadialGradient(glowX, glowY, 2, glowX, glowY, glowRadius);
+    grad.addColorStop(0, 'rgba(' + rgbYellow[0] + ',' + rgbYellow[1] + ',' + rgbYellow[2] + ', 0.12)');
+    grad.addColorStop(0.4, 'rgba(' + rgbRed[0] + ',' + rgbRed[1] + ',' + rgbRed[2] + ', 0.05)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    // ── Candle body ──
+
+    // Slight taper: top is 2px narrower than bottom
+    var taperTop = 1;
+    ctx.beginPath();
+    ctx.moveTo(candleLeft + taperTop, candleTop);
+    ctx.lineTo(candleLeft, candleBottom);
+    ctx.lineTo(candleRight, candleBottom);
+    ctx.lineTo(candleRight - taperTop, candleTop);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(' + rgbText[0] + ',' + rgbText[1] + ',' + rgbText[2] + ', 0.75)';
+    ctx.fill();
+
+    // Subtle edge highlight (left side)
+    ctx.beginPath();
+    ctx.moveTo(candleLeft + taperTop + 1, candleTop + 2);
+    ctx.lineTo(candleLeft + 1, candleBottom - 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Wax drip lines
+    ctx.strokeStyle = 'rgba(' + rgbText[0] + ',' + rgbText[1] + ',' + rgbText[2] + ', 0.15)';
+    ctx.lineWidth = 1.5;
+
+    // Left drip
+    ctx.beginPath();
+    ctx.moveTo(candleLeft + 3, candleTop + 8);
+    ctx.quadraticCurveTo(candleLeft + 1, candleTop + 20, candleLeft + 2, candleTop + 30);
+    ctx.stroke();
+
+    // Right drip
+    ctx.beginPath();
+    ctx.moveTo(candleRight - 4, candleTop + 12);
+    ctx.quadraticCurveTo(candleRight - 1, candleTop + 24, candleRight - 2, candleTop + 35);
+    ctx.stroke();
+
+    // Center drip
+    if (candleHeight > 30) {
+      ctx.beginPath();
+      ctx.moveTo(CANDLE_CENTER_X + 2, candleTop + 5);
+      ctx.quadraticCurveTo(CANDLE_CENTER_X + 3, candleTop + 15, CANDLE_CENTER_X + 1, candleTop + 22);
+      ctx.stroke();
+    }
+
+    // ── Wax pool (oval at top) ──
+
+    ctx.beginPath();
+    ctx.ellipse(CANDLE_CENTER_X, candleTop + 2, CANDLE_WIDTH / 2 - taperTop, 3, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(' + rgbText[0] + ',' + rgbText[1] + ',' + rgbText[2] + ', 0.55)';
+    ctx.fill();
+
+    // Inner pool (darker, melted wax)
+    ctx.beginPath();
+    ctx.ellipse(CANDLE_CENTER_X, candleTop + 2, 5, 2, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(' + rgbYellow[0] + ',' + rgbYellow[1] + ',' + rgbYellow[2] + ', 0.2)';
+    ctx.fill();
+
+    // ── Wick ──
+
+    ctx.beginPath();
+    ctx.moveTo(CANDLE_CENTER_X, wickBase);
+    ctx.quadraticCurveTo(CANDLE_CENTER_X + 1.5, wickBase - WICK_HEIGHT * 0.5, CANDLE_CENTER_X + 0.5, wickTip);
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // Wick glow point (ember at base of flame)
+    ctx.beginPath();
+    ctx.arc(CANDLE_CENTER_X + 0.5, wickTip + 1, 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(' + rgbRed[0] + ',' + rgbRed[1] + ',' + rgbRed[2] + ', 0.9)';
+    ctx.fill();
+
+    // ── Flame ──
+
+    drawFlame(flameBaseY, rgbRed, rgbYellow);
+
+    // ── Burn time label ──
+
+    var burnHours = totalBurnMs / (1000 * 60 * 60);
+    var burnMins = totalBurnMs / (1000 * 60);
+    if (burnHours >= 1) {
+      burnLabel.textContent = burnHours.toFixed(1) + 'h';
+    } else {
+      burnLabel.textContent = Math.floor(burnMins) + 'm';
+    }
+  }
+
+  function drawFlame(baseY, rgbRed, rgbYellow) {
+    var cx = CANDLE_CENTER_X + flameOffsetX;
+    var cy = baseY + flameOffsetY;
+    var s = flameScale;
+    var rot = flameRotation;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rot);
+
+    // Flame dimensions
+    var flameHeight = 18 * s;
+    var flameWidth = 7 * s;
+
+    // ── Outer flame (red-orange) ──
+
+    ctx.beginPath();
+    ctx.moveTo(0, 2);
+    ctx.bezierCurveTo(
+      -flameWidth * 0.9, -flameHeight * 0.3,
+      -flameWidth * 0.5, -flameHeight * 0.85,
+      0, -flameHeight
+    );
+    ctx.bezierCurveTo(
+      flameWidth * 0.5, -flameHeight * 0.85,
+      flameWidth * 0.9, -flameHeight * 0.3,
+      0, 2
+    );
+    ctx.fillStyle = 'rgba(' + rgbRed[0] + ',' + rgbRed[1] + ',' + rgbRed[2] + ', 0.7)';
+    ctx.fill();
+
+    // ── Middle flame (orange-yellow) ──
+
+    var midH = flameHeight * 0.75;
+    var midW = flameWidth * 0.6;
+
+    ctx.beginPath();
+    ctx.moveTo(0, 1);
+    ctx.bezierCurveTo(
+      -midW * 0.85, -midH * 0.3,
+      -midW * 0.45, -midH * 0.85,
+      0, -midH
+    );
+    ctx.bezierCurveTo(
+      midW * 0.45, -midH * 0.85,
+      midW * 0.85, -midH * 0.3,
+      0, 1
+    );
+    ctx.fillStyle = 'rgba(' + rgbYellow[0] + ',' + rgbYellow[1] + ',' + rgbYellow[2] + ', 0.85)';
+    ctx.fill();
+
+    // ── Inner core (bright white-yellow) ──
+
+    var innerH = flameHeight * 0.45;
+    var innerW = flameWidth * 0.3;
+
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.bezierCurveTo(
+      -innerW * 0.8, -innerH * 0.3,
+      -innerW * 0.4, -innerH * 0.85,
+      0, -innerH
+    );
+    ctx.bezierCurveTo(
+      innerW * 0.4, -innerH * 0.85,
+      innerW * 0.8, -innerH * 0.3,
+      0, 0
+    );
+    ctx.fillStyle = 'rgba(255, 250, 230, 0.95)';
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  // ── Animation loop ────────────────────────────────────────
+
+  var lastFrameTime = 0;
+
+  function animate(timestamp) {
+    if (!lastFrameTime) lastFrameTime = timestamp;
+    var dt = timestamp - lastFrameTime;
+    lastFrameTime = timestamp;
+
+    // Update burn time
+    totalBurnMs += dt;
+
+    // Update melt
+    updateMelt();
+
+    // Pick new flicker targets periodically
+    targetChangeTimer += dt;
+    var interval = activityLevel === 'high' ? TARGET_CHANGE_INTERVAL_HIGH
+                 : activityLevel === 'low' ? TARGET_CHANGE_INTERVAL_LOW
+                 : TARGET_CHANGE_INTERVAL_IDLE;
+
+    if (targetChangeTimer >= interval) {
+      targetChangeTimer = 0;
+      pickNewTargets();
+    }
+
+    // Lerp toward targets
+    flameOffsetX += (targetOffsetX - flameOffsetX) * LERP_SPEED;
+    flameOffsetY += (targetOffsetY - flameOffsetY) * LERP_SPEED;
+    flameRotation += (targetRotation - flameRotation) * LERP_SPEED;
+    flameScale += (targetScale - flameScale) * LERP_SPEED;
+
+    draw();
+
+    // Persist every ~30 seconds
+    if (Math.floor(totalBurnMs / 30000) !== Math.floor((totalBurnMs - dt) / 30000)) {
+      persist();
+    }
+
+    requestAnimationFrame(animate);
+  }
+
+  // ── Reset ─────────────────────────────────────────────────
+
+  function resetCandle() {
+    candleHeight = CANDLE_MAX_HEIGHT;
+    totalBurnMs = 0;
+    burnStartTime = Date.now();
+    persist();
+    draw();
+  }
+
+  // ── Persistence ───────────────────────────────────────────
+
+  function persist() {
+    try {
+      moltamp.settings.write({
+        candleHeight: candleHeight,
+        totalBurnMs: totalBurnMs,
+        savedAt: Date.now(),
+      });
+    } catch(e) {}
+  }
+
+  // ── Init ──────────────────────────────────────────────────
+
+  (async function() {
+    try {
+      var cfg = await moltamp.settings.read();
+      if (cfg && typeof cfg.candleHeight === 'number') {
+        candleHeight = cfg.candleHeight;
+        totalBurnMs = cfg.totalBurnMs || 0;
+
+        // Add elapsed real time since last save (capped at 30 min)
+        if (cfg.savedAt) {
+          var realElapsed = Date.now() - cfg.savedAt;
+          var capped = Math.min(realElapsed, 30 * 60 * 1000);
+          totalBurnMs += capped;
+        }
+
+        updateMelt();
+      }
+    } catch(e) {}
+
+    draw();
+    requestAnimationFrame(animate);
+  })();
+
+  // ── Shell activity subscription ───────────────────────────
+
+  moltamp.subscribe('telemetry', 'activity', function(level) {
+    activityLevel = level;
+    canvas.style.borderColor = level === 'high' ? 'var(--t-red)'
+                             : level === 'low' ? 'var(--t-yellow)'
+                             : 'var(--c-chrome-border)';
+  });
+
+})();
+</script>

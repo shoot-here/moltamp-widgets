@@ -1,0 +1,11 @@
+{
+  "id": "candle",
+  "name": "Candle",
+  "version": "1.0.0",
+  "description": "Flickering pixel candle. Flame reacts to shell activity.",
+  "author": "Moltamp",
+  "category": "Zen",
+  "sizing": "normal",
+  "agents": ["*"],
+  "api": { "ipc": [], "stores": ["telemetry.activity"], "keyboard": true, "shellState": true, "audio": false, "localAssets": false }
+}

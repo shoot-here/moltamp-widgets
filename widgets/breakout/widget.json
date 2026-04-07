@@ -1,0 +1,18 @@
+{
+  "id": "breakout",
+  "name": "Breakout",
+  "version": "1.0.0",
+  "description": "Classic brick breaker. Mouse or arrows to move paddle, space to launch.",
+  "author": "Moltamp",
+  "category": "Fun",
+  "sizing": "normal",
+  "agents": ["*"],
+  "api": {
+    "ipc": [],
+    "stores": ["telemetry.activity"],
+    "keyboard": true,
+    "shellState": true,
+    "audio": false,
+    "localAssets": false
+  }
+}

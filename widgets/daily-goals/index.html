@@ -1,0 +1,510 @@
+<!--
+  Moltamp Daily Goals Widget
+  Persistent checklist with daily auto-reset and streak tracking.
+-->
+
+<div id="root"></div>
+
+<style>
+  #root {
+    container-type: inline-size;
+    display: flex;
+    flex-direction: column;
+    padding: 8px 10px;
+    height: 100%;
+    box-sizing: border-box;
+    font-family: var(--font-chrome, var(--font-terminal, monospace));
+    font-size: clamp(8px, 2.8cqw, 13px);
+    color: var(--c-chrome-text, #ccc);
+    border: 1px solid var(--c-chrome-border, #333);
+    transition: border-color 0.4s ease;
+    overflow-y: auto;
+  }
+
+  .dg-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    flex-shrink: 0;
+  }
+
+  .dg-title {
+    font-size: clamp(7px, 2.5cqw, 11px);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--c-chrome-dim, #666);
+  }
+
+  .dg-streak {
+    font-size: clamp(7px, 2.5cqw, 11px);
+    letter-spacing: 0.5px;
+    color: var(--c-chrome-dim, #666);
+  }
+
+  .dg-streak-count {
+    color: var(--t-yellow, #ff4);
+  }
+
+  .dg-progress-wrap {
+    height: 3px;
+    background: color-mix(in srgb, var(--c-chrome-border, #333) 50%, transparent);
+    border-radius: 2px;
+    margin-bottom: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .dg-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--t-green, #4f4);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+
+  .dg-counter {
+    font-size: clamp(7px, 2.5cqw, 11px);
+    color: var(--c-chrome-dim, #666);
+    margin-bottom: 6px;
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
+  }
+
+  .dg-counter-done {
+    color: var(--t-green, #4f4);
+  }
+
+  .dg-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .dg-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    border-radius: 3px;
+    position: relative;
+    min-height: 22px;
+  }
+
+  .dg-item:hover {
+    background: color-mix(in srgb, var(--c-chrome-border, #333) 30%, transparent);
+  }
+
+  .dg-check {
+    width: 13px;
+    height: 13px;
+    min-width: 13px;
+    border: 1px solid var(--c-chrome-border, #333);
+    border-radius: 2px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(7px, 2.5cqw, 11px);
+    color: transparent;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+  }
+
+  .dg-check:hover {
+    border-color: var(--c-chrome-accent, #0ff);
+  }
+
+  .dg-check.checked {
+    border-color: var(--t-green, #4f4);
+    color: var(--t-green, #4f4);
+    background: color-mix(in srgb, var(--t-green, #4f4) 10%, transparent);
+  }
+
+  .dg-text {
+    flex: 1;
+    outline: none;
+    border: none;
+    background: none;
+    color: var(--c-chrome-text, #ccc);
+    font-family: inherit;
+    font-size: clamp(8px, 2.8cqw, 13px);
+    line-height: 1.4;
+    min-width: 0;
+    word-break: break-word;
+    padding: 0;
+    cursor: text;
+  }
+
+  .dg-text:empty::before {
+    content: 'click to add goal...';
+    color: var(--c-chrome-dim, #666);
+    opacity: 0.5;
+    font-style: italic;
+  }
+
+  .dg-text.completed {
+    text-decoration: line-through;
+    color: var(--c-chrome-dim, #666);
+    opacity: 0.6;
+  }
+
+  .dg-remove {
+    display: none;
+    width: 16px;
+    height: 16px;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(8px, 2.8cqw, 13px);
+    color: var(--c-chrome-dim, #666);
+    cursor: pointer;
+    border: none;
+    background: none;
+    border-radius: 2px;
+    flex-shrink: 0;
+    padding: 0;
+    line-height: 1;
+  }
+
+  .dg-remove:hover {
+    color: var(--t-red, #f44);
+  }
+
+  .dg-item:hover .dg-remove {
+    display: flex;
+  }
+
+  .dg-add-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    margin-top: 2px;
+    font-size: clamp(8px, 2.8cqw, 13px);
+    color: var(--c-chrome-dim, #666);
+    cursor: pointer;
+    border: none;
+    background: none;
+    font-family: inherit;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  .dg-add-btn:hover {
+    color: var(--c-chrome-accent, #0ff);
+    background: color-mix(in srgb, var(--c-chrome-border, #333) 30%, transparent);
+  }
+
+  .dg-add-btn .dg-add-icon {
+    width: 13px;
+    height: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed var(--c-chrome-border, #333);
+    border-radius: 2px;
+    font-size: clamp(8px, 2.8cqw, 13px);
+    line-height: 1;
+  }
+
+  .dg-add-btn:hover .dg-add-icon {
+    border-color: var(--c-chrome-accent, #0ff);
+  }
+
+  .dg-all-done {
+    font-size: clamp(7px, 2.5cqw, 11px);
+    color: var(--t-green, #4f4);
+    text-align: center;
+    padding: 4px 0;
+    letter-spacing: 0.5px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .dg-all-done.visible {
+    opacity: 1;
+  }
+</style>
+
+<script>
+(function() {
+  var MAX_GOALS = 7;
+  var DEFAULT_COUNT = 3;
+  var root = document.getElementById('root');
+
+  // -- State --
+  var goals = [];
+  var streak = 0;
+  var lastDate = '';
+
+  // -- Build DOM --
+  var headerDiv = moltamp.el('div', {}, []);
+  headerDiv.className = 'dg-header';
+
+  var titleSpan = moltamp.el('span', {}, []);
+  titleSpan.className = 'dg-title';
+  titleSpan.textContent = 'GOALS';
+
+  var streakSpan = moltamp.el('span', {}, []);
+  streakSpan.className = 'dg-streak';
+  headerDiv.appendChild(titleSpan);
+  headerDiv.appendChild(streakSpan);
+
+  var progressWrap = moltamp.el('div', {}, []);
+  progressWrap.className = 'dg-progress-wrap';
+  var progressBar = moltamp.el('div', {}, []);
+  progressBar.className = 'dg-progress-bar';
+  progressWrap.appendChild(progressBar);
+
+  var counterDiv = moltamp.el('div', {}, []);
+  counterDiv.className = 'dg-counter';
+
+  var listDiv = moltamp.el('div', {}, []);
+  listDiv.className = 'dg-list';
+
+  var addBtn = moltamp.el('button', {}, []);
+  addBtn.className = 'dg-add-btn';
+  var addIcon = moltamp.el('span', {}, []);
+  addIcon.className = 'dg-add-icon';
+  addIcon.textContent = '+';
+  var addLabel = moltamp.el('span', {}, []);
+  addLabel.textContent = 'add goal';
+  addBtn.appendChild(addIcon);
+  addBtn.appendChild(addLabel);
+  addBtn.addEventListener('click', function() {
+    if (goals.length < MAX_GOALS) {
+      goals.push({ text: '', done: false });
+      renderList();
+      save();
+      // Focus the new item's text
+      var items = listDiv.querySelectorAll('.dg-text');
+      if (items.length > 0) {
+        items[items.length - 1].focus();
+      }
+    }
+  });
+
+  var allDoneDiv = moltamp.el('div', {}, []);
+  allDoneDiv.className = 'dg-all-done';
+  allDoneDiv.textContent = 'all goals complete';
+
+  root.appendChild(headerDiv);
+  root.appendChild(progressWrap);
+  root.appendChild(counterDiv);
+  root.appendChild(listDiv);
+  root.appendChild(addBtn);
+  root.appendChild(allDoneDiv);
+
+  // -- Helpers --
+  function getTodayStr() {
+    var d = new Date();
+    return d.getFullYear() + '-' +
+      String(d.getMonth() + 1).padStart(2, '0') + '-' +
+      String(d.getDate()).padStart(2, '0');
+  }
+
+  function countDone() {
+    var c = 0;
+    for (var i = 0; i < goals.length; i++) {
+      if (goals[i].done) c++;
+    }
+    return c;
+  }
+
+  function allComplete() {
+    if (goals.length === 0) return false;
+    for (var i = 0; i < goals.length; i++) {
+      if (!goals[i].done) return false;
+    }
+    return true;
+  }
+
+  // -- Render --
+  function updateHeader() {
+    if (streak > 0) {
+      streakSpan.innerHTML = '<span class="dg-streak-count">' + streak + '</span> day streak';
+    } else {
+      streakSpan.textContent = '';
+    }
+  }
+
+  function updateProgress() {
+    var total = goals.length;
+    var done = countDone();
+    var pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    progressBar.style.width = pct + '%';
+    counterDiv.innerHTML = '<span class="dg-counter-done">' + done + '</span>/' + total + ' done';
+
+    if (allComplete() && total > 0) {
+      allDoneDiv.classList.add('visible');
+    } else {
+      allDoneDiv.classList.remove('visible');
+    }
+  }
+
+  function updateAddButton() {
+    addBtn.style.display = goals.length >= MAX_GOALS ? 'none' : 'flex';
+  }
+
+  function renderList() {
+    listDiv.innerHTML = '';
+    for (var i = 0; i < goals.length; i++) {
+      (function(idx) {
+        var goal = goals[idx];
+
+        var item = moltamp.el('div', {}, []);
+        item.className = 'dg-item';
+
+        var check = moltamp.el('div', {}, []);
+        check.className = 'dg-check' + (goal.done ? ' checked' : '');
+        check.textContent = goal.done ? '\u2713' : '';
+        check.addEventListener('click', function() {
+          goals[idx] = Object.assign({}, goals[idx], { done: !goals[idx].done });
+          renderList();
+          save();
+          checkStreakOnComplete();
+        });
+
+        var text = moltamp.el('span', {}, []);
+        text.className = 'dg-text' + (goal.done ? ' completed' : '');
+        text.setAttribute('contenteditable', 'true');
+        text.setAttribute('spellcheck', 'false');
+        text.textContent = goal.text;
+        text.addEventListener('input', function() {
+          goals[idx] = Object.assign({}, goals[idx], { text: text.textContent || '' });
+          save();
+        });
+        text.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            text.blur();
+          }
+        });
+        text.addEventListener('blur', function() {
+          goals[idx] = Object.assign({}, goals[idx], { text: text.textContent || '' });
+          save();
+        });
+
+        var remove = moltamp.el('button', {}, []);
+        remove.className = 'dg-remove';
+        remove.textContent = '\u00d7';
+        remove.addEventListener('click', function() {
+          goals = goals.filter(function(_, gi) { return gi !== idx; });
+          renderList();
+          save();
+        });
+
+        item.appendChild(check);
+        item.appendChild(text);
+        item.appendChild(remove);
+        listDiv.appendChild(item);
+      })(i);
+    }
+
+    updateProgress();
+    updateHeader();
+    updateAddButton();
+  }
+
+  // -- Streak Logic --
+  function checkStreakOnComplete() {
+    if (allComplete() && goals.length > 0) {
+      var today = getTodayStr();
+      // Only bump streak once per day — check if we already counted today
+      // The streak is incremented when all goals are first completed today
+      // We track this by checking if lastDate is already today with a completed state
+      save(); // ensure current completion state is persisted
+    }
+  }
+
+  function handleDayReset(savedDate, savedGoals, savedStreak, savedAllDone) {
+    var today = getTodayStr();
+
+    if (savedDate === today) {
+      // Same day — restore as-is
+      goals = savedGoals || [];
+      streak = savedStreak || 0;
+      return;
+    }
+
+    // New day
+    if (savedDate && savedAllDone) {
+      // Yesterday (or last active day) was all complete — check continuity
+      var prev = new Date(savedDate + 'T00:00:00');
+      var now = new Date(today + 'T00:00:00');
+      var diffDays = Math.round((now - prev) / (1000 * 60 * 60 * 24));
+      if (diffDays === 1) {
+        streak = (savedStreak || 0) + 1;
+      } else {
+        // Gap of more than 1 day breaks streak
+        streak = 0;
+      }
+    } else if (savedDate) {
+      // Previous day was NOT all complete — reset streak
+      streak = 0;
+    } else {
+      streak = savedStreak || 0;
+    }
+
+    // Keep goal text but uncheck all
+    goals = (savedGoals || []).map(function(g) {
+      return { text: g.text, done: false };
+    });
+    lastDate = today;
+  }
+
+  // -- Persistence --
+  function save() {
+    var today = getTodayStr();
+    lastDate = today;
+    try {
+      moltamp.settings.write({
+        goals: goals.map(function(g) { return { text: g.text, done: g.done }; }),
+        date: today,
+        streak: streak,
+        allDone: allComplete()
+      });
+    } catch(e) {}
+  }
+
+  // -- Init --
+  (async function() {
+    try {
+      var saved = await moltamp.settings.read();
+      if (saved && saved.goals) {
+        handleDayReset(saved.date, saved.goals, saved.streak, saved.allDone);
+      } else {
+        // First run: create default empty slots
+        goals = [];
+        for (var i = 0; i < DEFAULT_COUNT; i++) {
+          goals.push({ text: '', done: false });
+        }
+        streak = 0;
+      }
+    } catch(e) {
+      goals = [];
+      for (var i = 0; i < DEFAULT_COUNT; i++) {
+        goals.push({ text: '', done: false });
+      }
+      streak = 0;
+    }
+    renderList();
+    save();
+  })();
+
+  // -- Shell activity border --
+  if (typeof moltamp !== 'undefined' && moltamp.subscribe) {
+    moltamp.subscribe('telemetry', 'activity', function(level) {
+      var borderColor;
+      switch (level) {
+        case 'high': borderColor = 'var(--c-chrome-accent)'; break;
+        case 'low':  borderColor = 'var(--c-chrome-dim)'; break;
+        default:     borderColor = 'var(--c-chrome-border)'; break;
+      }
+      root.style.borderColor = borderColor;
+    });
+  }
+})();
+</script>

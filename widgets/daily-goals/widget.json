@@ -1,0 +1,11 @@
+{
+  "id": "daily-goals",
+  "name": "Daily Goals",
+  "version": "1.0.0",
+  "description": "3-5 daily checkboxes. Persisted, resets each day. Simple accountability.",
+  "author": "Moltamp",
+  "category": "Zen",
+  "sizing": "normal",
+  "agents": ["*"],
+  "api": { "ipc": [], "stores": ["telemetry.activity"], "keyboard": true, "shellState": true, "audio": false, "localAssets": false }
+}
