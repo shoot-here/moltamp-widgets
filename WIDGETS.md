@@ -549,22 +549,20 @@ Widgets can be bundled inside a skin at `~/Moltamp/skins/<skin>/widgets/<categor
 
 ```
 ~/Moltamp/widgets/
-  System/
-    my-cpu-monitor/
-      widget.json
-      index.html
-    my-disk-usage/
-      widget.json
-      index.html
-  Fun/
-    8ball/
-      widget.json
-      index.html
-      assets/
-        ball.png
+  my-cpu-monitor/
+    widget.json
+    index.html
+  my-disk-usage/
+    widget.json
+    index.html
+  8ball/
+    widget.json
+    index.html
+    assets/
+      ball.png
 ```
 
-The **category folder** (`System`, `Fun`, etc.) is the grouping shown in the widget picker. Name it whatever you want. Category folders are recommended but optional -- a widget placed directly in `~/Moltamp/widgets/my-widget/` will still be discovered.
+Widgets sit flat under `~/Moltamp/widgets/<widget-id>/`. The grouping shown in the widget picker (`System`, `Fun`, etc.) comes from the `category` field in your widget's `widget.json`, NOT the directory layout. Two widgets with `"category": "System"` get grouped together regardless of how their folders are organized.
 
 ---
 
@@ -807,8 +805,8 @@ var rate = config.refreshRate || 3000;
 
 Ready to share your widget with the community?
 
-1. Fork the [moltamp-widgets](https://github.com/moltamp/moltamp-widgets) repo.
-2. Create your widget folder in `widgets/<Category>/<your-widget-id>/` (e.g., `widgets/System/my-cpu-monitor/`). The category folder groups your widget in the picker.
+1. Fork the [moltamp-widgets](https://github.com/shoot-here/moltamp-widgets) repo.
+2. Create your widget folder at `widgets/<your-widget-id>/` (e.g., `widgets/my-cpu-monitor/`). The grouping in the picker comes from the `category` field in your `widget.json`, not the folder location.
 3. Include `widget.json` and `index.html`, plus an optional `assets/` directory.
 4. Run through the [Checklist](#checklist) below.
 5. Open a PR using the submission template.

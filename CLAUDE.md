@@ -6,16 +6,17 @@ Community widget repository for MOLTamp. Widgets are self-contained HTML pages r
 
 ```
 moltamp-widgets/
-├── widgets/            <- Category folders containing widgets
-│   └── <Category>/
-│       └── <widget-id>/
-│           ├── widget.json  <- Manifest (required)
-│           ├── index.html   <- Widget code (required)
-│           └── assets/      <- Images, sounds (optional)
+├── widgets/            <- Each subfolder is a complete widget
+│   └── <widget-id>/
+│       ├── widget.json  <- Manifest (required)
+│       ├── index.html   <- Widget code (required)
+│       └── assets/      <- Images, sounds (optional)
 ├── WIDGETS.md          <- Full specification (read this first)
 ├── CONTRIBUTING.md     <- PR guidelines
 └── README.md           <- Overview + widget catalog
 ```
+
+The `category` is set in each widget's `widget.json` (e.g., `"category": "System"`) — it controls how the widget is grouped in the picker, NOT the directory structure. Widgets sit flat under `widgets/<widget-id>/` regardless of category.
 
 ## Critical Rules -- NEVER Violate These
 
