@@ -372,6 +372,95 @@ Variables update live when the user switches skins.
 
 ---
 
+## Make your text scale with the widget
+
+MOLTamp widgets get rendered at wildly different sizes -- 60px tall in a vibes slot, 400px tall in a sidebar tab, full-width in a custom layout. Hardcoded font sizes that look great at one size become illegible at another. There's also a global **Widget Text Scale** slider in Settings > General > Display (range 0.7x-1.5x) that lets users adjust text density across the entire app.
+
+Your widget should respond to both. Two patterns work well.
+
+### Pattern 1 -- CSS `clamp()` with container queries (preferred)
+
+The simplest, JS-free approach. Set a `container-type` on the widget root, then use `cqw` (container query width) units inside `clamp()`:
+
+```css
+.widget-root {
+  container-type: inline-size;
+}
+
+.widget-label {
+  font-size: clamp(8px, 2.5cqw, 18px);
+  /* min 8px, scales with container width, capped at 18px */
+}
+
+.widget-value {
+  font-size: clamp(14px, 6cqw, 48px);
+}
+```
+
+Tune the middle value (`2.5cqw`, `6cqw`) until it feels right at small AND large sizes. Test by resizing the widget in a custom tab, and remember to test in both `panel` and `vibes` contexts -- their aspect ratios are very different.
+
+### Pattern 2 -- ResizeObserver + CSS variable
+
+If you want more control, observe the widget container and write a CSS variable. This also makes it easy to mix in the user's global text scale (read from `moltamp.settings.read()`).
+
+```html
+<div class="widget-root" id="root">
+  <div class="label">DENVER</div>
+  <div class="value">2:47 PM</div>
+</div>
+
+<style>
+  .label { font-size: calc(10px * var(--scale, 1)); }
+  .value { font-size: calc(28px * var(--scale, 1)); }
+</style>
+
+<script>
+  var root = document.getElementById('root');
+  var ro = new ResizeObserver(function(entries) {
+    var w = entries[0].contentRect.width;
+    // Scale factor relative to a 200px reference width
+    root.style.setProperty('--scale', String(w / 200));
+  });
+  ro.observe(root);
+</script>
+```
+
+### What to scale, and what to leave alone
+
+**Scale these:**
+- Body text, labels, timestamps, descriptions
+- Primary value displays (numbers, time, status text)
+- Secondary metric names
+
+**Leave these at fixed sizes:**
+- Tooltips that follow the cursor (must stay legible regardless of widget size)
+- Tiny status icons or single-character glyphs
+- Very small "footnote" text where 8-9px is intentional
+
+### Reading the user's global scale (optional)
+
+If you want your widget to respect the global Widget Text Scale slider, read it from settings on load. The value lives at `widgetTextScale` (number, defaults to `1.0`):
+
+```js
+(async function() {
+  var cfg = (await moltamp.settings.read()) || {};
+  var userScale = typeof cfg.widgetTextScale === 'number' ? cfg.widgetTextScale : 1.0;
+  document.documentElement.style.setProperty('--user-text-scale', String(userScale));
+})();
+```
+
+Then multiply any size by both your container scale AND the user scale:
+
+```css
+.label {
+  font-size: calc(10px * var(--scale, 1) * var(--user-text-scale, 1));
+}
+```
+
+The single rule: **labels should grow with the widget, not stay micro at all sizes.**
+
+---
+
 ## Canvas and CSS Variables
 
 **This is the #1 gotcha for widget authors.** CSS variables like `var(--c-chrome-accent)` work in stylesheets and inline styles, but **Canvas 2D context does not resolve them**. If you pass `'var(--t-green)'` to `ctx.fillStyle`, it silently fails and nothing renders.
