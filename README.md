@@ -67,7 +67,7 @@ moltamp-widgets/
 
 ```bash
 git clone https://github.com/shoot-here/moltamp-widgets.git
-cp -r moltamp-widgets/widgets/system-stats ~/.moltamp/widgets/
+cp -r moltamp-widgets/widgets/system-stats ~/Moltamp/widgets/
 ```
 
 Restart Moltamp (or switch tabs) and the widget appears in your widget picker.
