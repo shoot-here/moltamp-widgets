@@ -200,19 +200,23 @@ Understanding when your widget is created, visible, hidden, and destroyed helps 
 
 ## Sandbox Environment
 
-Widgets run in a **sandboxed iframe** with `allow-scripts` only. Understanding what's available and what's blocked will save you debugging time.
+Widgets run in a **sandboxed iframe** plus a **strict CSP** that the host injects on every load. The two work together: the sandbox flag handles cross-origin isolation, and the CSP is what actually blocks network and remote resources. (For a long time the docs claimed the sandbox alone blocked network -- that was wrong. `allow-scripts` does not block `fetch`. The CSP does.) Understanding what's available and what's blocked will save you debugging time.
 
 **Available:**
 - Full DOM API (`document.createElement`, `getElementById`, etc.)
 - `<canvas>` 2D context
 - `requestAnimationFrame`
-- `setTimeout`, `setInterval` (but prefer `moltamp.poll()` -- it auto-cleans up)
+- `setTimeout`, `setInterval` with **function callbacks only** (string form is blocked -- see below)
 - `addEventListener` for keyboard, mouse, touch, and `message` events
 - CSS variables from the active skin (injected by host)
 - The `moltamp` SDK object on `window`
+- `data:` and `blob:` URIs for inline images and canvas-generated content
 
 **Blocked:**
-- `fetch()`, `XMLHttpRequest`, `WebSocket` -- no network access
+- `fetch()`, `XMLHttpRequest`, `WebSocket` -- blocked by the CSP. There is no network access from a widget; the SDK is the only data path.
+- External resources of any kind: `<img src="https://...">`, `<link rel="stylesheet">`, `@import url(https://...)`, web fonts, nested iframes -- the CSP blocks all remote loads.
+- Image sources other than `data:` and `blob:` -- canvas-generated images and inline data URIs work; everything else is blocked.
+- `eval()`, `new Function()`, `setTimeout("string code")`, `setInterval("string code")` -- blocked because the CSP does not grant `unsafe-eval`. Always pass real functions to `setTimeout`/`setInterval`, never strings.
 - `window.parent`, `window.top`, `parent.postMessage` -- cross-origin blocked; the SDK bridges this for you
 - ES modules (`import`, `<script type="module">`) -- not supported
 - `localStorage`, `sessionStorage` -- use `moltamp.settings` instead
@@ -582,7 +586,7 @@ console.log('[my-widget] stats:', JSON.stringify(stats));
 **If your widget is blank:** Check the Console for errors. Common causes:
 - Top-level `await` (syntax error in sandbox)
 - Missing `moltamp` object (running outside MOLTamp)
-- `fetch()` calls (blocked by sandbox)
+- `fetch()` calls (blocked by the host CSP)
 - `<!doctype>` / `<html>` / `<body>` wrapper conflicting with host document
 
 **If your widget loads but doesn't update:** Check that `moltamp.poll()` is running and your callback isn't throwing. A thrown error inside `poll()` silently stops updates.
@@ -636,8 +640,10 @@ Users install by dropping the zip into **Settings > Tabs > Import Widget...** or
 
 ### DON'T
 
-- **Don't use external URLs.** No CDN links, no Google Fonts, no API calls. The iframe sandbox blocks network access. Everything must be self-contained.
-- **Don't use `fetch()` or `XMLHttpRequest`.** Sandboxed. Use `moltamp.call()` for data.
+- **Don't use external URLs.** No CDN links, no Google Fonts, no API calls. A strict CSP injected by the host blocks all network and remote resource loading -- your widget will fail to render. Everything must be self-contained.
+- **Don't use `fetch()` or `XMLHttpRequest`.** Blocked by the CSP. Use `moltamp.call()` for data.
+- **Don't load remote images, stylesheets, or fonts.** The only image sources the CSP allows are `data:` and `blob:` URIs (useful for canvas-generated content and inline base64). `<img src="https://...">`, `@font-face` with remote URLs, and `<link rel="stylesheet">` to a CDN are all blocked.
+- **Don't use `eval()`, `new Function()`, or string-form `setTimeout`/`setInterval`.** The CSP does not grant `unsafe-eval`. Always pass a real function to `setTimeout(fn, ms)` -- never a string.
 - **Don't try to access `window.parent`.** Sandboxed. Use the SDK's `postMessage` bridge.
 - **Don't use `document.write()`.** It will blank your widget. Use `moltamp.el()` or standard DOM APIs.
 - **Don't set `overflow: auto` on body.** The host sets `overflow: hidden`. Widgets shouldn't scroll -- if your content doesn't fit, make it smaller.
@@ -731,10 +737,10 @@ var config = await moltamp.settings.read();
 })();
 ```
 
-### 5. Using fetch/XHR for data (blocked by sandbox)
+### 5. Using fetch/XHR for data (blocked by CSP)
 
 ```js
-// BROKEN -- network is blocked
+// BROKEN -- network is blocked by the host's strict CSP
 var resp = await fetch('https://api.example.com/data');
 
 // FIXED -- use the SDK bridge, data comes from the host process

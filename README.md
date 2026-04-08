@@ -23,7 +23,7 @@
 
 This is the open-source widget library for **[Moltamp](https://moltamp.com)** — a skinnable cockpit UI for AI coding terminals like **Claude Code**, **Codex CLI**, **Gemini CLI**, and **Aider**. Widgets are bite-sized HTML pages that live in Moltamp's side panels and vibes banner — clocks, system monitors, weather, notes, audio visualizers, mini games, anything you can build with HTML, CSS, and vanilla JS.
 
-Every widget runs in a **sandboxed iframe** with no network access. Data flows in through a typed SDK bridge (`moltamp.call()`, `moltamp.subscribe()`, `moltamp.poll()`), and colors come from the active skin's CSS variables — so your widget automatically retones for every theme without a single line of extra code.
+Every widget runs in a **sandboxed iframe under a strict CSP injected by the host** — the CSP is what actually blocks network access, remote images, and remote fonts. Data flows in through a typed SDK bridge (`moltamp.call()`, `moltamp.subscribe()`, `moltamp.poll()`), and colors come from the active skin's CSS variables — so your widget automatically retones for every theme without a single line of extra code.
 
 If you want a Claude Code companion that feels alive — vibe coding alongside a CPU graph, a lo-fi visualizer, and a Pomodoro timer — this is the place.
 

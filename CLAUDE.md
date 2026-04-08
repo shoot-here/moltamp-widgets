@@ -1,6 +1,6 @@
 # MOLTamp Widgets -- AI Contributor Guide
 
-Community widget repository for MOLTamp. Widgets are self-contained HTML pages rendered in sandboxed iframes with access to the `moltamp` SDK.
+Community widget repository for MOLTamp. Widgets are self-contained HTML pages rendered in a sandboxed iframe under a strict CSP injected by the host, with access to the `moltamp` SDK for data.
 
 ## Repository Structure
 
@@ -21,15 +21,17 @@ The `category` is set in each widget's `widget.json` (e.g., `"category": "System
 ## Critical Rules -- NEVER Violate These
 
 1. **No `<!doctype>`, `<html>`, `<head>`, or `<body>` tags.** The host iframe provides these. Write bare `<div>` + `<style>` + `<script>`.
-2. **No `fetch()`, `XMLHttpRequest`, or external URLs.** The sandbox blocks all network. Use `moltamp.call()` for data.
-3. **No ES modules.** No `import`, no `<script type="module">`. Use plain `<script>` with vanilla JS.
-4. **No top-level `await`.** Wrap async code in an IIFE: `(async function() { ... })();`
-5. **No `localStorage` / `sessionStorage`.** Use `moltamp.settings.read()` / `moltamp.settings.write()`.
-6. **Use theme CSS variables for ALL colors.** `var(--c-chrome-accent)`, not `#4d9fff`.
-7. **Use `moltamp.poll()` instead of `setInterval`.** Auto-cleans up when widget unloads.
-8. **Handle null from `moltamp.settings.read()`** on first run. Always provide defaults.
-9. **Canvas cannot resolve CSS variables.** Use `getComputedStyle(document.documentElement).getPropertyValue('--var-name')`.
-10. **API features must be nested under `"api"` in widget.json.** `keyboard`, `audio`, `shellState`, `localAssets` at the top level are silently ignored.
+2. **No `fetch()`, `XMLHttpRequest`, `WebSocket`, or external URLs.** A strict CSP injected by the host blocks all network and all remote resource loading (images, stylesheets, fonts, iframes). The sandbox flag alone does NOT block network -- the CSP does. Use `moltamp.call()` for data.
+3. **No `eval`, `new Function`, or string-form `setTimeout`/`setInterval`.** The CSP does not grant `unsafe-eval`. Always pass a real function reference: `setTimeout(fn, ms)`, never `setTimeout("fn()", ms)`.
+4. **Only `data:` and `blob:` image sources are allowed.** No remote `<img src>`, no `url('https://...')` in CSS, no remote `@font-face`. Bundle assets locally or generate them on a canvas.
+5. **No ES modules.** No `import`, no `<script type="module">`. Use plain `<script>` with vanilla JS.
+6. **No top-level `await`.** Wrap async code in an IIFE: `(async function() { ... })();`
+7. **No `localStorage` / `sessionStorage`.** Use `moltamp.settings.read()` / `moltamp.settings.write()`.
+8. **Use theme CSS variables for ALL colors.** `var(--c-chrome-accent)`, not `#4d9fff`.
+9. **Use `moltamp.poll()` instead of `setInterval`.** Auto-cleans up when widget unloads.
+10. **Handle null from `moltamp.settings.read()`** on first run. Always provide defaults.
+11. **Canvas cannot resolve CSS variables.** Use `getComputedStyle(document.documentElement).getPropertyValue('--var-name')`.
+12. **API features must be nested under `"api"` in widget.json.** `keyboard`, `audio`, `shellState`, `localAssets` at the top level are silently ignored.
 
 ## When Generating a New Widget
 
@@ -44,9 +46,11 @@ The `category` is set in each widget's `widget.json` (e.g., `"category": "System
 ## Common AI Mistakes
 
 - Wrapping HTML in `<!doctype html>` / `<html>` / `<body>` -- host already provides these
-- Using `fetch()` or `XMLHttpRequest` -- blocked by sandbox. Use `moltamp.call()`.
-- Using `import` or `<script type="module">` -- not supported in sandbox
-- Top-level `await` -- syntax error in sandbox. Use IIFE wrapper.
+- Using `fetch()` or `XMLHttpRequest` -- blocked by the host CSP. Use `moltamp.call()`.
+- Loading remote images, fonts, or stylesheets -- CSP only permits `data:` and `blob:` image sources; everything else is blocked
+- Using `eval()`, `new Function()`, or passing a string to `setTimeout`/`setInterval` -- blocked (CSP has no `unsafe-eval`). Always pass a real function.
+- Using `import` or `<script type="module">` -- not supported in the widget sandbox
+- Top-level `await` -- syntax error in widgets. Use IIFE wrapper.
 - Using `localStorage` -- sandboxed out. Use `moltamp.settings`.
 - Putting `keyboard: true` at top level of widget.json instead of under `"api"`
 - Passing CSS variables to Canvas `fillStyle`/`strokeStyle` -- silently fails

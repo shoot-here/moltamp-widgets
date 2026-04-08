@@ -37,7 +37,8 @@ The category folder (e.g., `System`, `Media`, `Fun`, `Productivity`) groups your
 The full spec lives in [WIDGETS.md](WIDGETS.md). Here are the rules that matter most for submissions:
 
 1. **Unique widget ID.** Lowercase, hyphens and underscores only. Must not collide with existing widgets.
-2. **No external URLs or network calls.** No `fetch()`, no CDN links, no API calls. The sandbox blocks all network access. Use `moltamp.call()` for data.
+2. **No external URLs or network calls.** No `fetch()`, no `XMLHttpRequest`, no `WebSocket`, no CDN links, no remote images, no remote fonts. A strict CSP injected by the host blocks all network and remote resource loading -- the sandbox flag alone does NOT. Use `moltamp.call()` for data. The only permitted image sources are `data:` and `blob:` URIs.
+   - Related: the CSP also blocks `eval`, `new Function`, and string-form `setTimeout`/`setInterval`. Always pass a real function reference.
 3. **No ES modules or top-level await.** No `import`, no `<script type="module">`. Wrap async code in an IIFE: `(async function() { ... })();`
 4. **Use theme variables for all colors.** `var(--c-chrome-accent)`, not `#4d9fff`. Your widget must look correct in every skin.
 5. **Handle null settings on first run.** `moltamp.settings.read()` returns `null` on the first load. Always provide defaults: `var config = (await moltamp.settings.read()) || {};`
