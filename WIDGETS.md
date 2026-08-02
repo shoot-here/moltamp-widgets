@@ -127,7 +127,7 @@ Reference assets in CSS:
 
 Without `localAssets: true`, asset paths are not resolved and images won't load.
 
-**Supported formats:** PNG, JPG, WebP, GIF, SVG (same as skins).
+**Supported formats:** PNG, JPG, JPEG, WebP, GIF, SVG, AVIF for images; WOFF2, TTF, OTF for fonts; plus `.css` and `.js`. Any other file type in your widget folder is rejected when the widget is imported as a `.zip`.
 **File limits:** 5MB per file, 20MB total per widget.
 
 ### Audio
@@ -142,7 +142,8 @@ sound.play();
 - Audio files must be local (bundled in `assets/`) -- no external URLs.
 - `api.audio: false` (default): `new Audio()` will be blocked by the sandbox.
 - Use sparingly -- unexpected sounds from widgets are disruptive.
-- **Supported formats:** MP3, WAV, OGG, AAC.
+- **Playable formats:** MP3, WAV, OGG, AAC (whatever the embedded Chromium decodes).
+- **Distribution caveat:** audio extensions are **not** on the `.zip` import allowlist. A widget folder copied straight into `~/Moltamp/widgets/` plays its bundled audio fine, but importing that same widget as a `.zip` fails with "Disallowed file type." If you want your widget to be zip-installable, generate tones with the Web Audio API instead of shipping audio files.
 
 ---
 
